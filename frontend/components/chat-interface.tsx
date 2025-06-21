@@ -12,6 +12,7 @@ import type { Message, Attachment } from "@/lib/types"
 import { MessageContent } from "./message-content"
 import { SettingsModal } from "./settings-modal"
 import { useSidebar } from "@/contexts/sidebar-context"
+import { useUser, SignedIn, SignedOut, UserButton, SignInButton, SignUpButton } from "@clerk/nextjs"
 
 interface ChatInterfaceProps {
   chatId?: string
@@ -27,7 +28,7 @@ export function ChatInterface({ chatId, userId, initialMessages = [] }: ChatInte
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const { toggleSidebar, isOpen, isMobile } = useSidebar()
-
+  const { user } = useUser()
   const { messages, input, handleInputChange, handleSubmit, isLoading, reload, setMessages } = useChat({
     api: "/api/chat",
     body: { chatId, userId },
@@ -141,27 +142,34 @@ export function ChatInterface({ chatId, userId, initialMessages = [] }: ChatInte
             <span className="text-gray-900 dark:text-white font-medium text-lg">ConversAI</span>
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="ghost"
-              className="hidden sm:flex text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2f2f2f]"
-            >
-              Share
-            </Button>
-            <SettingsModal>
+            <SignedIn>
               <Button
                 size="sm"
                 variant="ghost"
-                className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2f2f2f] h-8 w-8 p-0"
+                className="hidden sm:flex text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2f2f2f]"
               >
-                <Settings className="w-4 h-4" />
+                Share
               </Button>
-            </SettingsModal>
-            <Avatar className="w-8 h-8">
-              <AvatarFallback className="bg-gray-200 dark:bg-[#2f2f2f] text-gray-900 dark:text-white text-xs">
-                U
-              </AvatarFallback>
-            </Avatar>
+              <SettingsModal>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2f2f2f] h-8 w-8 p-0"
+                >
+                  <Settings className="w-4 h-4" />
+                </Button>
+              </SettingsModal>
+              <Avatar className="w-8 h-8">
+                <UserButton />
+              </Avatar>
+            </SignedIn>
+            <SignedOut>
+              <SignInButton>
+                <Button size="sm" variant="outline" className="py-2 text-gray-800 dark:text-white dark:border-gray-400 dark:hover:border-white dark:bg-[#212121]">
+                  Sign in
+                </Button>
+              </SignInButton>
+            </SignedOut>
           </div>
         </div>
 
@@ -264,7 +272,7 @@ export function ChatInterface({ chatId, userId, initialMessages = [] }: ChatInte
           </SettingsModal>
           <Avatar className="w-8 h-8">
             <AvatarFallback className="bg-gray-200 dark:bg-[#2f2f2f] text-gray-900 dark:text-white text-xs">
-              U
+              {user?.firstName?.charAt(0)}
             </AvatarFallback>
           </Avatar>
         </div>
@@ -353,7 +361,7 @@ export function ChatInterface({ chatId, userId, initialMessages = [] }: ChatInte
                 {message.role === "user" && (
                   <Avatar className="w-6 h-6 md:w-8 md:h-8 mt-1 flex-shrink-0">
                     <AvatarFallback className="bg-gray-200 dark:bg-[#2f2f2f] text-gray-900 dark:text-white text-xs">
-                      U
+                      {user?.firstName?.charAt(0)}
                     </AvatarFallback>
                   </Avatar>
                 )}
