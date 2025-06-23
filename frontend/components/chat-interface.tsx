@@ -4,10 +4,10 @@ import type React from "react"
 import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar } from "@/components/ui/avatar"
 import { Textarea } from "@/components/ui/textarea"
-import { Edit3, Check, X, Copy, RefreshCw, Mic, Plus, Settings, Menu, ArrowUp } from "lucide-react"
-import type { Message, Attachment } from "@/lib/types"
+import { Edit3, Check, X, Copy, RefreshCw, Plus, Settings, Menu, ArrowUp, FileText } from "lucide-react"
+import type { Message, Attachment, ChatMessage, MessagePart } from "@/lib/types"
 import { MessageContent } from "./message-content"
 import { SettingsModal } from "./settings-modal"
 import { useSidebar } from "@/contexts/sidebar-context"
@@ -18,10 +18,11 @@ interface ChatInterfaceProps {
   chatId?: string
   initialMessages?: Message[]
   onMessageSent?: () => void
+  onChatIdUpdate?: (newChatId: string) => void
 }
 
-export function ChatInterface({ chatId, initialMessages = [], onMessageSent }: ChatInterfaceProps) {
-  const [messages, setMessages] = useState<Message[]>(initialMessages)
+export function ChatInterface({ chatId, initialMessages = [], onMessageSent, onChatIdUpdate }: ChatInterfaceProps) {
+  const [messages, setMessages] = useState<ChatMessage[]>(initialMessages as ChatMessage[])
   const [input, setInput] = useState("")
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
   const [editContent, setEditContent] = useState("")
@@ -33,6 +34,8 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent }: C
   const { toggleSidebar, isOpen, isMobile } = useSidebar()
   const { user } = useUser()
   const userId = user?.id || "default-user"
+  const [pendingParts, setPendingParts] = useState<any[]>([])
+  const [uploading, setUploading] = useState(false)
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -58,7 +61,7 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent }: C
 
   // Update messages when initialMessages prop changes (when switching chats)
   useEffect(() => {
-    setMessages(initialMessages)
+    setMessages(initialMessages as ChatMessage[])
   }, [initialMessages])
 
   const handleEditMessage = (messageId: string, content: string) => {
@@ -70,18 +73,72 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent }: C
     const messageIndex = messages.findIndex((m) => m.id === messageId)
     if (messageIndex === -1) return
 
-    const updatedMessages = messages.map((m, i) =>
-      i === messageIndex ? { ...m, content: editContent } : m
-    )
-    setMessages(updatedMessages)
-    await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages: updatedMessages, chatId, userId }),
-    })
-    setEditingMessageId(null)
-    setEditContent("")
-    onMessageSent?.()
+    setIsLoading(true)
+    try {
+      // 1. PATCH to update the message content in the backend
+      const patchRes = await fetch(`/api/chat?chatId=${chatId}&userId=${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "updateMessage", messageIndex, newContent: editContent }),
+      })
+      if (!patchRes.ok) throw new Error("Failed to update message")
+
+      // 2. PATCH to trim the chat after the edited message
+      const trimRes = await fetch(`/api/chat?chatId=${chatId}&userId=${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "regenerateFromMessage", messageIndex }),
+      })
+      if (!trimRes.ok) throw new Error("Failed to trim chat after edit")
+
+      // 3. GET the updated chat from the backend to ensure state is in sync
+      const getRes = await fetch(`/api/chat?chatId=${chatId}&userId=${userId}`)
+      if (!getRes.ok) throw new Error("Failed to fetch updated chat")
+      const chatData = await getRes.json()
+      const trimmedMessages = chatData.messages || []
+      setMessages(trimmedMessages as ChatMessage[])
+      setEditingMessageId(null)
+      setEditContent("")
+
+      // 4. POST to regenerate the assistant's answer
+      // Do NOT re-add the user message, just POST the trimmed messages as context
+      setIsLoading(true)
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: trimmedMessages, chatId, userId }),
+      })
+      if (!response.ok) throw new Error("Failed to regenerate assistant response")
+
+      const reader = response.body?.getReader()
+      if (!reader) throw new Error("No response body reader available")
+      const decoder = new TextDecoder()
+      let fullResponse = ""
+      // Add assistant message placeholder
+      const assistantMessageId = `msg-${Date.now() + 1}`
+      setMessages((prev) => [
+        ...trimmedMessages,
+        { id: assistantMessageId, role: "assistant", content: "", timestamp: new Date() }
+      ] as ChatMessage[])
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        const chunk = decoder.decode(value)
+        fullResponse += chunk
+        setMessages((prev) =>
+          prev.map(msg =>
+            msg.id === assistantMessageId
+              ? { ...msg, content: fullResponse }
+              : msg
+          )
+        )
+      }
+      onMessageSent?.()
+    } catch (error) {
+      console.error("Error during message edit/regeneration:", error)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const handleCancelEdit = () => {
@@ -89,8 +146,21 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent }: C
     setEditContent("")
   }
 
-  const handleFileUpload = (newAttachments: Attachment[]) => {
-    setAttachments((prev) => [...prev, ...newAttachments])
+  const handleFileUpload = async (files: FileList) => {
+    setUploading(true)
+    const fileParts = await Promise.all(
+      Array.from(files).map(async (file) => {
+        const arrayBuffer = await file.arrayBuffer()
+        return {
+          type: 'file',
+          data: Array.from(new Uint8Array(arrayBuffer)),
+          mimeType: file.type,
+          name: file.name,
+        }
+      })
+    )
+    setPendingParts((prev) => [...prev, ...fileParts])
+    setUploading(false)
   }
 
   const removeAttachment = (attachmentId: string) => {
@@ -99,38 +169,25 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent }: C
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-
-    if (!input.trim() && attachments.length === 0) return
-
+    if (!input.trim() && pendingParts.length === 0) return
+    const textPart = input.trim() ? [{ type: 'text', text: input.trim() }] : []
+    const content = [...textPart, ...pendingParts]
     const newUserMessage: Message = {
       id: `msg-${Date.now()}`,
       role: "user",
-      content: input,
+      content: content as any, // Message type expects string, but we use parts
       timestamp: new Date(),
     }
-    setMessages((prev) => [...prev, newUserMessage])
+    setMessages((prev) => [...prev, newUserMessage] as ChatMessage[])
     setInput("")
-    setAttachments([])
+    setPendingParts([])
     setIsLoading(true)
-
-    let messageContent = input
-    if (attachments.length > 0) {
-      const attachmentText = attachments.map((att) => `[Attachment: ${att.name} (${att.url})]`).join("\n")
-      messageContent += `\n\n${attachmentText}`
-    }
-
     try {
-      console.log("Sending request to API with:", {
-        messages: [...messages, { ...newUserMessage, content: messageContent }],
-        chatId,
-        userId,
-      })
-      
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          messages: [...messages, { ...newUserMessage, content: messageContent }],
+          messages: [...messages, { role: "user", content }],
           chatId,
           userId,
         }),
@@ -157,13 +214,13 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent }: C
       const assistantMessageId = `msg-${Date.now() + 1}`
       setMessages((prev) => [
         ...prev.slice(0, -1), 
-        { ...newUserMessage, content: messageContent }, 
+        { ...newUserMessage, content: content } as ChatMessage, 
         { 
           id: assistantMessageId, 
           role: "assistant", 
           content: "", 
           timestamp: new Date() 
-        }
+        } as ChatMessage
       ])
 
       while (true) {
@@ -188,6 +245,24 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent }: C
       
       // Call onMessageSent when streaming is complete
       onMessageSent?.()
+      
+      // If this was a new chat (chatId was undefined), update the parent with the new chat ID
+      if (!chatId && onChatIdUpdate) {
+        // Get the most recent chat (should be the one we just created)
+        try {
+          const chatResponse = await fetch(`/api/chat?userId=${userId}`)
+          if (chatResponse.ok) {
+            const chats = await chatResponse.json()
+            if (chats.length > 0) {
+              // Get the most recent chat (should be the one we just created)
+              const latestChat = chats[0]
+              onChatIdUpdate(latestChat.id)
+            }
+          }
+        } catch (error) {
+          console.error("Failed to get new chat ID:", error)
+        }
+      }
     } catch (error) {
       console.error("Error:", error)
       // Remove the assistant message if there was an error
@@ -199,6 +274,66 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent }: C
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text)
+  }
+
+  // Regenerate the last assistant response
+  const handleRegenerateLastAssistant = async () => {
+    // Find the last user message
+    const lastUserIndex = [...messages].reverse().findIndex(m => m.role === "user")
+    if (lastUserIndex === -1) return
+    // Index from the start
+    const userIdx = messages.length - 1 - lastUserIndex
+    // Only regenerate if the last message is assistant and right after the last user message
+    if (messages.length < 2 || messages[messages.length - 1].role !== "assistant" || messages[messages.length - 2].role !== "user") return
+    setIsLoading(true)
+    try {
+      // 1. Remove the last assistant message from the backend
+      await fetch(`/api/chat?chatId=${chatId}&userId=${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "removeLastAssistant" }),
+      })
+      // 2. Fetch the updated chat
+      const getRes = await fetch(`/api/chat?chatId=${chatId}&userId=${userId}`)
+      if (!getRes.ok) throw new Error("Failed to fetch updated chat")
+      const chatData = await getRes.json()
+      const trimmedMessages = chatData.messages || []
+      setMessages(trimmedMessages as ChatMessage[])
+      // 3. POST to regenerate the assistant's answer
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: trimmedMessages, chatId, userId }),
+      })
+      if (!response.ok) throw new Error("Failed to regenerate assistant response")
+      const reader = response.body?.getReader()
+      if (!reader) throw new Error("No response body reader available")
+      const decoder = new TextDecoder()
+      let fullResponse = ""
+      const assistantMessageId = `msg-${Date.now() + 1}`
+      setMessages((prev) => [
+        ...trimmedMessages,
+        { id: assistantMessageId, role: "assistant", content: "", timestamp: new Date() }
+      ] as ChatMessage[])
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        const chunk = decoder.decode(value)
+        fullResponse += chunk
+        setMessages((prev) =>
+          prev.map(msg =>
+            msg.id === assistantMessageId
+              ? { ...msg, content: fullResponse }
+              : msg
+          )
+        )
+      }
+      onMessageSent?.()
+    } catch (error) {
+      console.error("Error during regeneration:", error)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   if (messages.length === 0) {
@@ -253,6 +388,49 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent }: C
           <div className="w-full max-w-3xl">
             <form onSubmit={handleSubmit} className="relative">
               <div className="flex flex-col bg-gray-100 dark:bg-[#2f2f2f] rounded-2xl md:rounded-3xl overflow-hidden">
+                <div className="flex flex-row gap-2">
+                  {pendingParts.map((part, idx) => (
+                    <div key={part.name || idx} className="relative inline-block align-top">
+                      {/* Close icon */}
+                      <button
+                        className="absolute -top-0 -right-2 z-10 bg-white dark:bg-[#232324] rounded-full p-0.5 shadow hover:bg-gray-200 dark:hover:bg-[#333] transition"
+                        onClick={() => setPendingParts(pendingParts.filter((_, i) => i !== idx))}
+                        type="button"
+                        aria-label="Remove file"
+                      >
+                        <X className="w-4 h-4 text-red-400" />
+                      </button>
+                      {/* Badge */}
+                      {part.mimeType?.startsWith("image/") ? (
+                        <div className="flex items-center gap-2 rounded-xl border bg-white dark:bg-[#232324] p-2 mt-1 pr-4 shadow-sm w-[180px]">
+                          <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gray-100 overflow-hidden">
+                            <img
+                              src={URL.createObjectURL(new Blob([new Uint8Array(part.data)], { type: part.mimeType }))}
+                              alt={part.name}
+                              className="w-10 h-10 object-cover rounded"
+                            />
+                          </div>
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-xs font-semibold truncate max-w-[100px]">{part.name}</span>
+                            <span className="text-[10px] text-gray-500">{part.mimeType.split('/')[1]?.toUpperCase()}</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 rounded-xl border bg-white dark:bg-[#232324] p-2 pr-4 shadow-sm">
+                          <div className={`flex items-center justify-center w-8 h-8 rounded-lg ${part.mimeType.includes('pdf') ? 'bg-pink-100' : 'bg-blue-100'}`}> 
+                            <span className={`material-symbols-rounded ${part.mimeType.includes('pdf') ? 'text-pink-500' : 'text-blue-500'} text-2xl`}>
+                              {part.mimeType.includes('pdf') ? <FileText /> : 'description'}
+                            </span>
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="text-xs font-semibold truncate max-w-[120px]">{part.name}</span>
+                            <span className="text-[10px] text-gray-500">{part.mimeType.split('/')[1]?.toUpperCase()}</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
                 <Textarea
                   ref={textareaRef}
                   value={input}
@@ -268,17 +446,14 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent }: C
                 />
                 <div className="flex items-center justify-between p-2">
                   <div className="flex items-center gap-2">
-                    <FileUpload onUpload={handleFileUpload}>
+                    <FileUpload onUpload={files => handleFileUpload(files as FileList)}>
                       <Button type="button" size="sm" variant="ghost" className="h-8 px-2 md:px-3 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-[#404040] rounded-lg text-xs md:text-sm">
                         <Plus className="w-3 h-3 md:w-4 md:h-4 mr-1" />
                       </Button>
                     </FileUpload>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Button type="button" size="sm" variant="ghost" className="h-8 w-8 p-0 text-gray-400 hover:text-white hover:bg-[#404040] rounded-lg">
-                      <Mic className="w-3 h-3 md:w-4 md:h-4" />
-                    </Button>
-                    <Button type="submit" disabled={isLoading || (!input.trim() && attachments.length === 0)} size="sm" className="h-8 w-8 p-0 bg-gray-900 dark:bg-white text-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200 rounded-full disabled:opacity-50">
+                    <Button type="submit" disabled={isLoading || (!input.trim() && pendingParts.length === 0)} size="sm" className="h-8 w-8 p-0 bg-gray-900 dark:bg-white text-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200 rounded-full disabled:opacity-50">
                       <ArrowUp className="w-3 h-3 md:w-4 md:h-4" />
                     </Button>
                   </div>
@@ -293,14 +468,14 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent }: C
 
   return (
     <div className="flex flex-col h-full bg-white dark:bg-[#212121]">
-      <div className="flex items-center justify-between p-3 md:p-4 border-b border-gray-200 dark:border-[#2f2f2f]">
+      <div className="flex items-center justify-between p-3 md:p-4">
         <div className="flex items-center gap-2">
           {(!isOpen && isMobile) && (
             <Button size="sm" variant="ghost" onClick={toggleSidebar} className="h-8 w-8 p-0 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2f2f2f] mr-2">
               <Menu className="w-4 h-4" />
             </Button>
           )}
-          <span className="text-gray-900 dark:text-white font-medium">ConversAI</span>
+          <span className="text-gray-900 dark:text-white font-medium text-lg">ConversAI</span>
         </div>
         <div className="flex items-center gap-2">
           <Button size="sm" variant="ghost" className="hidden sm:flex text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2f2f2f]">
@@ -318,70 +493,102 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent }: C
       </div>
       <ScrollArea className="flex-1">
         <div className="max-w-3xl mx-auto py-4 md:py-6 px-3 md:px-4 space-y-4 md:space-y-6">
-          {messages.map((message, index) => (
-            <div key={message.id} className="group">
-              <div className="flex gap-3 md:gap-4">
-                {message.role === "assistant" && (
-                  <Avatar className="w-6 h-6 md:w-8 md:h-8 mt-1 flex-shrink-0">
-                    <AvatarFallback className="bg-[#10a37f] text-white text-xs font-bold">AI</AvatarFallback>
-                  </Avatar>
-                )}
-                <div className="flex-1 min-w-0">
-                  {editingMessageId === message.id ? (
-                    <div className="space-y-3">
-                      <Textarea
-                        value={editContent}
-                        onChange={(e) => setEditContent(e.target.value)}
-                        className="min-h-[100px] resize-none bg-gray-100 dark:bg-[#2f2f2f] border-gray-300 dark:border-[#404040] text-gray-900 dark:text-white"
-                        autoFocus
-                      />
-                      <div className="flex gap-2">
-                        <Button size="sm" onClick={() => handleSaveEdit(message.id)} className="h-8 bg-gray-900 dark:bg-white text-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200">
-                          <Check className="w-4 h-4" />
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={handleCancelEdit} className="h-8 border-gray-300 dark:border-[#404040] text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2f2f2f]">
-                          <X className="w-4 h-4" />
-                        </Button>
+          {messages.map((message, index) => {
+            const isUser = message.role === "user"
+            const isAssistant = message.role === "assistant"
+            const isEditing = editingMessageId === message.id
+            return (
+              <div
+                key={`${message.id}-${index}`}
+                className={`flex w-full ${isUser ? "justify-end" : "justify-start"}`}
+              >
+                <div className={`group relative ${isUser ? "ml-auto" : "mr-auto"}`}>
+                  {/* Message content */}
+                  <div className="flex flex-col">
+                    {Array.isArray(message.content)
+                      ? message.content.filter((part: MessagePart) => part.type === 'text').map((part: MessagePart, idx: number) => (
+                          <div
+                            key={idx}
+                            className={`px-5 py-3 ${isUser ? "bg-gray-100 dark:bg-[#303030] text-gray-900 dark:text-white rounded-2xl rounded-br-md" : "text-gray-900 dark:text-white"}`}
+                            style={{ background: isAssistant ? "none" : undefined }}
+                          >
+                            <MessageContent content={part.type === 'text' ? part.text : ''} />
+                          </div>
+                        ))
+                      : (
+                          <div
+                            className={`px-5 py-3 ${isUser ? "bg-gray-100 dark:bg-[#303030] text-gray-900 dark:text-white rounded-2xl rounded-br-md" : "text-gray-900 dark:text-white"}`}
+                            style={{ background: isAssistant ? "none" : undefined }}
+                          >
+                            <MessageContent content={message.content as string} />
+                          </div>
+                        )}
+                    
+                    {/* File/image badges below the message bubble */}
+                    {Array.isArray(message.content) && message.content.some((p: MessagePart) => p.type === 'file' && p.mimeType && (p.mimeType.startsWith('image/') || p.mimeType)) && (
+                      <div className="flex flex-wrap gap-2 mt-2 justify-end">
+                        {message.content.filter((part: MessagePart) => part.type === 'file' && part.mimeType && (part.mimeType.startsWith('image/') || part.mimeType)).map((part: any, idx: number) =>
+                          part.type === 'file' && part.mimeType && part.mimeType.startsWith('image/') ? (
+                            <div key={idx} className="flex items-center gap-2 rounded-xl border bg-white dark:bg-[#232324] p-2 pr-4 shadow-sm w-[180px]">
+                              <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gray-100 overflow-hidden">
+                                <img
+                                  src={URL.createObjectURL(new Blob([new Uint8Array(part.data)], { type: part.mimeType }))}
+                                  alt={part.name}
+                                  className="w-10 h-10 object-cover rounded"
+                                />
+                              </div>
+                              <div className="flex flex-col min-w-0">
+                                <span className="text-xs font-semibold truncate max-w-[100px]">{part.name}</span>
+                                <span className="text-[10px] text-gray-500">{part.mimeType.split('/')[1]?.toUpperCase()}</span>
+                              </div>
+                            </div>
+                          ) : (
+                            <div key={idx} className="flex items-center gap-2 rounded-xl border bg-white dark:bg-[#232324] p-2 pr-4 shadow-sm">
+                              <div className={`flex items-center justify-center w-8 h-8 rounded-lg ${part.mimeType?.includes('pdf') ? 'bg-pink-100' : 'bg-blue-100'}`}> 
+                                <span className={`material-symbols-rounded ${part.mimeType?.includes('pdf') ? 'text-pink-500' : 'text-blue-500'} text-2xl`}>
+                                  {part.mimeType?.includes('pdf') ? <FileText /> : 'description'}
+                                </span>
+                              </div>
+                              <div className="flex flex-col">
+                                <span className="text-xs font-semibold truncate max-w-[120px]">{part.name}</span>
+                                <span className="text-[10px] text-gray-500">{part.mimeType?.split('/')[1]?.toUpperCase()}</span>
+                              </div>
+                            </div>
+                          )
+                        )}
                       </div>
+                    )}
+                  </div>
+                  
+                  {/* Copy and Edit buttons - positioned below message and only visible on hover */}
+                  {isUser && (
+                    <div className="flex gap-1 mt-2 justify-end opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                      <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-gray-400 hover:text-white" onClick={() => copyToClipboard(Array.isArray(message.content) ? message.content.filter((p: any) => p.type === 'text').map((p: any) => p.text).join("\n") : message.content as string)}>
+                        <Copy className="w-3 h-3" />
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-gray-400 hover:text-white" onClick={() => handleEditMessage(message.id, Array.isArray(message.content) ? message.content.filter((p: any) => p.type === 'text').map((p: any) => p.text).join("\n") : message.content as string)}>
+                        <Edit3 className="w-3 h-3" />
+                      </Button>
                     </div>
-                  ) : (
-                    <div className="relative">
-                      <div className="text-gray-900 dark:text-white">
-                        <MessageContent content={message.content} />
-                      </div>
-                      <div className="opacity-0 group-hover:opacity-100 transition-opacity mt-2 flex gap-1">
-                        <Button size="sm" variant="ghost" className="h-6 w-6 md:h-8 md:w-8 p-0 text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2f2f2f]" onClick={() => copyToClipboard(message.content)}>
-                          <Copy className="w-3 h-3 md:w-4 md:h-4" />
+                  )}
+                  {isAssistant && (
+                    <div className="flex gap-1 mt-2 ml-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                      <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-gray-400 hover:text-black dark:hover:text-white" onClick={() => copyToClipboard(Array.isArray(message.content) ? message.content.filter((p: any) => p.type === 'text').map((p: any) => p.text).join("\n") : message.content)}>
+                        <Copy className="w-3 h-3" />
+                      </Button>
+                      {index === messages.length - 1 && (
+                        <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-gray-400 hover:text-black dark:hover:text-white" onClick={handleRegenerateLastAssistant}>
+                          <RefreshCw className="w-3 h-3" />
                         </Button>
-                        {message.role === "user" && (
-                          <Button size="sm" variant="ghost" className="h-6 w-6 md:h-8 md:w-8 p-0 text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2f2f2f]" onClick={() => handleEditMessage(message.id, message.content)}>
-                            <Edit3 className="w-3 h-3 md:w-4 md:h-4" />
-                          </Button>
-                        )}
-                        {message.role === "assistant" && index === messages.length - 1 && (
-                          <Button size="sm" variant="ghost" className="h-6 w-6 md:h-8 md:w-8 p-0 text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2f2f2f]" onClick={() => handleSubmit({ preventDefault: () => {} } as any)}>
-                            <RefreshCw className="w-3 h-3 md:w-4 md:h-4" />
-                          </Button>
-                        )}
-                      </div>
+                      )}
                     </div>
                   )}
                 </div>
-                {message.role === "user" && (
-                  <Avatar className="w-6 h-6 md:w-8 md:h-8 mt-1 flex-shrink-0">
-                    <AvatarFallback className="bg-gray-200 dark:bg-[#2f2f2f] text-gray-900 dark:text-white text-xs">
-                      {user?.firstName?.charAt(0)}
-                    </AvatarFallback>
-                  </Avatar>
-                )}
               </div>
-            </div>
-          ))}
+            )
+          })}
           {isLoading && (
             <div className="flex gap-3 md:gap-4">
-              <Avatar className="w-6 h-6 md:w-8 md:h-8 mt-1 flex-shrink-0">
-                <AvatarFallback className="bg-[#10a37f] text-white text-xs font-bold">AI</AvatarFallback>
-              </Avatar>
               <div className="flex-1">
                 <div className="flex items-center gap-2 text-gray-400">
                   <div className="flex gap-1">
@@ -396,10 +603,53 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent }: C
           <div ref={messagesEndRef} />
         </div>
       </ScrollArea>
-      <div className="p-3 md:p-4 border-t border-gray-200 dark:border-[#2f2f2f]">
+      <div className="p-3 md:p-4 ">
         <div className="max-w-3xl mx-auto">
           <form onSubmit={handleSubmit} className="relative">
             <div className="flex flex-col bg-gray-100 dark:bg-[#2f2f2f] rounded-2xl md:rounded-3xl border border-gray-300 dark:border-[#404040] overflow-hidden">
+              <div className="flex flex-row gap-2">
+                {pendingParts.map((part, idx) => (
+                  <div key={part.name || idx} className="relative inline-block align-top">
+                    {/* Close icon */}
+                    <button
+                      className="absolute -top-0 -right-2 z-10 bg-white dark:bg-[#232324] rounded-full p-0.5 shadow hover:bg-gray-200 dark:hover:bg-[#333] transition"
+                      onClick={() => setPendingParts(pendingParts.filter((_, i) => i !== idx))}
+                      type="button"
+                      aria-label="Remove file"
+                    >
+                      <X className="w-4 h-4 text-red-400" />
+                    </button>
+                    {/* Badge */}
+                    {part.mimeType?.startsWith("image/") ? (
+                      <div className="flex items-center gap-2 rounded-xl border bg-white dark:bg-[#232324] p-2 mt-1 pr-4 shadow-sm w-[180px]">
+                        <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gray-100 overflow-hidden">
+                          <img
+                            src={URL.createObjectURL(new Blob([new Uint8Array(part.data)], { type: part.mimeType }))}
+                            alt={part.name}
+                            className="w-10 h-10 object-cover rounded"
+                          />
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-xs font-semibold truncate max-w-[100px]">{part.name}</span>
+                          <span className="text-[10px] text-gray-500">{part.mimeType.split('/')[1]?.toUpperCase()}</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 rounded-xl border bg-white dark:bg-[#232324] p-2 pr-4 shadow-sm">
+                        <div className={`flex items-center justify-center w-8 h-8 rounded-lg ${part.mimeType.includes('pdf') ? 'bg-pink-100' : 'bg-blue-100'}`}> 
+                          <span className={`material-symbols-rounded ${part.mimeType.includes('pdf') ? 'text-pink-500' : 'text-blue-500'} text-2xl`}>
+                            {part.mimeType.includes('pdf') ? <FileText /> : 'description'}
+                          </span>
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-xs font-semibold truncate max-w-[120px]">{part.name}</span>
+                          <span className="text-[10px] text-gray-500">{part.mimeType.split('/')[1]?.toUpperCase()}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
               <Textarea
                 ref={textareaRef}
                 value={input}
@@ -415,17 +665,14 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent }: C
               />
               <div className="flex items-center justify-between p-2">
                 <div className="flex items-center gap-2">
-                  <FileUpload onUpload={handleFileUpload}>
+                  <FileUpload onUpload={files => handleFileUpload(files as FileList)}>
                     <Button type="button" size="sm" variant="ghost" className="h-8 px-2 md:px-3 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-[#404040] rounded-lg text-xs md:text-sm">
                       <Plus className="w-3 h-3 md:w-4 md:h-4 mr-1" />
                     </Button>
                   </FileUpload>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button type="button" size="sm" variant="ghost" className="h-8 w-8 p-0 text-gray-400 hover:text-white hover:bg-[#404040] rounded-lg">
-                    <Mic className="w-3 h-3 md:w-4 md:h-4" />
-                  </Button>
-                  <Button type="submit" disabled={isLoading || (!input.trim() && attachments.length === 0)} size="sm" className="h-8 w-8 p-0 bg-gray-900 dark:bg-white text-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200 rounded-full disabled:opacity-50">
+                  <Button type="submit" disabled={isLoading || (!input.trim() && pendingParts.length === 0)} size="sm" className="h-8 w-8 p-0 bg-gray-900 dark:bg-white text-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200 rounded-full disabled:opacity-50">
                     <ArrowUp className="w-3 h-3 md:w-4 md:h-4" />
                   </Button>
                 </div>

@@ -29,6 +29,29 @@ export default function ChatPage() {
     setRefreshSidebar(prev => prev + 1)
   }, [])
 
+  const handleChatIdUpdate = useCallback((newChatId: string) => {
+    setCurrentChatId(newChatId)
+  }, [])
+
+  // Check if current chat still exists when sidebar refreshes
+  useEffect(() => {
+    if (currentChatId && refreshSidebar > 0) {
+      fetch(`/api/chat?chatId=${currentChatId}&userId=${userId}`)
+        .then((res) => {
+          if (!res.ok) {
+            // Chat was deleted, create a new one
+            setCurrentChatId(undefined)
+            setInitialMessages([])
+          }
+        })
+        .catch((err) => {
+          console.error("Failed to verify chat exists:", err)
+          setCurrentChatId(undefined)
+          setInitialMessages([])
+        })
+    }
+  }, [refreshSidebar, currentChatId, userId])
+
   useEffect(() => {
     if (currentChatId) {
       fetch(`/api/chat?chatId=${currentChatId}&userId=${userId}`)
@@ -65,6 +88,7 @@ export default function ChatPage() {
             chatId={currentChatId} 
             initialMessages={initialMessages}
             onMessageSent={handleMessageSent}
+            onChatIdUpdate={handleChatIdUpdate}
           />
         </div>
       </div>

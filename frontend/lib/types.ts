@@ -32,3 +32,22 @@ export interface User {
   name: string
   avatar?: string
 }
+
+export type MessagePart =
+  | { type: 'text'; text: string }
+  | { type: 'file'; data: number[]; mimeType: string; name: string };
+
+export interface ChatMessage {
+  id: string;
+  role: "user" | "assistant" | "system";
+  content: string | MessagePart[];
+  timestamp: Date;
+  edited?: boolean;
+  originalContent?: string;
+  attachments?: Attachment[];
+}
+
+interface FileUploadProps {
+  onUpload: (files: FileList) => void | Promise<void>;
+  children: React.ReactNode;
+}

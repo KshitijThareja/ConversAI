@@ -66,7 +66,7 @@ export const MessageContent = memo(({ content }: MessageContentProps) => {
           )
         },
         p: ({ children }) => (
-          <p className={`mb-4 last:mb-0 leading-relaxed ${theme === "dark" ? "text-gray-100" : "text-gray-900"}`}>
+          <p className={`last:mb-0 leading-relaxed`}>
             {children}
           </p>
         ),
