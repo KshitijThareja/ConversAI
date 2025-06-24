@@ -61,7 +61,6 @@ export default function ChatPage() {
           return res.json()
         })
         .then((data) => {
-          console.log("Fetched chat data:", data)
           setInitialMessages(data.messages || [])
         })
         .catch((err) => {

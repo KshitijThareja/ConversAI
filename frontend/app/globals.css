@@ -257,3 +257,26 @@ textarea:focus-visible {
   min-width: 16px !important;
   min-height: 16px !important;
 }
+
+/* Custom mobile scrollbar for Radix ScrollArea */
+@media (max-width: 768px) {
+  .scrollbar-mobile-visible {
+    /* Always show scrollbar on mobile for custom scroll area */
+    scrollbar-width: thin;
+    scrollbar-color: #888 #f1f1f1;
+    /* For webkit browsers */
+  }
+  .scrollbar-mobile-visible::-webkit-scrollbar {
+    width: 8px;
+    background: #f1f1f1;
+  }
+  .scrollbar-thumb-mobile::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+  }
+  .scrollbar-thumb-mobile {
+    background-color: #888 !important;
+    min-width: 8px;
+    min-height: 32px;
+  }
+}

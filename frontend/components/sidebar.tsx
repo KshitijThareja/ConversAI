@@ -134,7 +134,7 @@ function SidebarContent({
               size="sm"
               variant="ghost"
               onClick={closeSidebar}
-              className="h-8 w-8 p-0 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2f2f2f] md:hidden"
+              className="h-8 w-8 p-0 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2f2f2f] md:hidden focus:outline-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
               aria-label="Close sidebar"
             >
               <X className="w-4 h-4" />
@@ -169,11 +169,11 @@ function SidebarContent({
         />
       </nav>
 
-      <section className="flex-1 overflow-hidden" role="region" aria-label="Chat history">
+      <section className="flex-1 min-h-0 flex flex-col overflow-hidden" role="region" aria-label="Chat history">
         <div className="px-3 py-2">
           <h2 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Chats</h2>
         </div>
-        <ScrollArea className="flex-1 px-2" role="region" aria-label="Chat list">
+        <ScrollArea className="h-full px-2" role="region" aria-label="Chat list">
           <div className="space-y-1 pb-4" role="list" aria-label="Chat history">
             {isLoading ? (
               <div className="text-center text-gray-400 py-4 text-sm" role="status" aria-live="polite">Loading...</div>
