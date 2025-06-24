@@ -114,34 +114,40 @@ function SidebarContent({
   }
 
   return (
-    <div className={`h-full flex flex-col bg-gray-50 ${isOpen ? "dark:bg-[#171717]" : "dark:bg-[#212121]"} text-gray-900 dark:text-white`}>
-      <div className="flex justify-between items-center p-3">
+    <aside className={`h-full flex flex-col bg-gray-50 ${isOpen ? "dark:bg-[#171717]" : "dark:bg-[#212121]"} text-gray-900 dark:text-white`} role="complementary" aria-label="Chat navigation sidebar">
+      <header className="flex justify-between items-center p-3" role="banner">
         <div className="flex items-center gap-2 pl-1">
-          <div className="w-6 h-6 bg-gray-900 dark:bg-white rounded-sm flex items-center justify-center">
+          <div className="w-6 h-6 bg-gray-900 dark:bg-white rounded-sm flex items-center justify-center" role="img" aria-label="ConversAI logo">
             <div className="w-4 h-4 bg-white dark:bg-black rounded-sm"></div>
           </div>
         </div>
         <div className="flex items-center gap-1">
-          <div onClick={toggleSidebar} className="place-items-center w-10 h-10 rounded-md text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2f2f2f]">
+          <button 
+            onClick={toggleSidebar} 
+            className="place-items-center w-10 h-10 rounded-md text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2f2f2f]"
+            aria-label="Toggle sidebar"
+          >
             {isMobile ? (isOpen ? <SidebarIcon className="w-4 h-4 hidden" /> : <SidebarIcon className="w-4 h-4" />) : <SidebarIcon className="mt-2 w-6 h-6 m-auto" />}
-          </div>
+          </button>
           {isMobile && (
             <Button
               size="sm"
               variant="ghost"
               onClick={closeSidebar}
               className="h-8 w-8 p-0 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2f2f2f] md:hidden"
+              aria-label="Close sidebar"
             >
               <X className="w-4 h-4" />
             </Button>
           )}
         </div>
-      </div>
+      </header>
 
-      <div className="p-2 pl-0 space-y-1">
+      <nav className="p-2 pl-0 space-y-1" role="navigation" aria-label="Chat actions">
         <Button
           onClick={handleNewChat}
           className="w-full justify-start bg-transparent hover:bg-gray-100 dark:hover:bg-[#2f2f2f] text-gray-900 dark:text-white border-0 h-10"
+          aria-label="Start new chat"
         >
           <Plus className="w-4 h-4 mr-3" />
           New chat
@@ -152,22 +158,25 @@ function SidebarContent({
           onChatSelect={handleChatSelect}
           onNewChat={onNewChat}
           trigger={
-            <Button className="w-full justify-start bg-transparent hover:bg-gray-100 dark:hover:bg-[#2f2f2f] text-gray-900 dark:text-white border-0 h-10">
+            <Button 
+              className="w-full justify-start bg-transparent hover:bg-gray-100 dark:hover:bg-[#2f2f2f] text-gray-900 dark:text-white border-0 h-10"
+              aria-label="Search chats"
+            >
               <Search className="w-4 h-4 mr-3" />
               Search chats
             </Button>
           }
         />
-      </div>
+      </nav>
 
-      <div className="flex-1 overflow-hidden">
+      <section className="flex-1 overflow-hidden" role="region" aria-label="Chat history">
         <div className="px-3 py-2">
-          <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Chats</h3>
+          <h2 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Chats</h2>
         </div>
-        <ScrollArea className="flex-1 px-2">
-          <div className="space-y-1 pb-4">
+        <ScrollArea className="flex-1 px-2" role="region" aria-label="Chat list">
+          <div className="space-y-1 pb-4" role="list" aria-label="Chat history">
             {isLoading ? (
-              <div className="text-center text-gray-400 py-4 text-sm">Loading...</div>
+              <div className="text-center text-gray-400 py-4 text-sm" role="status" aria-live="polite">Loading...</div>
             ) : (
               [...chats]
                 .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
@@ -175,9 +184,12 @@ function SidebarContent({
                   <div
                     key={chat.id}
                     className={`group flex items-center gap-3 p-2 rounded-lg cursor-pointer hover:bg-gray-100 dark:hover:bg-[#2f2f2f] transition-colors ${currentChatId === chat.id ? "bg-gray-100 dark:bg-[#2f2f2f]" : ""}`}
+                    role="listitem"
+                    aria-label={`Chat: ${getMessagePreviewText(chat.title)}`}
+                    aria-current={currentChatId === chat.id ? "true" : undefined}
                     onClick={() => handleChatSelect(chat.id)}
                   >
-                    <MessageSquare className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                    <MessageSquare className="w-4 h-4 text-gray-400 flex-shrink-0" aria-hidden="true" />
                     <span className="flex-1 truncate text-sm text-gray-700 dark:text-gray-200">{getMessagePreviewText(chat.title)}</span>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -185,21 +197,23 @@ function SidebarContent({
                           size="sm"
                           variant="ghost"
                           className="opacity-0 group-hover:opacity-100 h-6 w-6 p-0 text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-[#404040]"
+                          aria-label={`More options for chat: ${getMessagePreviewText(chat.title)}`}
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <MoreHorizontal className="w-3 h-3" />
+                          <MoreHorizontal className="w-3 h-3" aria-hidden="true" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="bg-white dark:bg-[#2f2f2f] border-gray-200 dark:border-[#404040]">
+                      <DropdownMenuContent align="end" className="bg-white dark:bg-[#2f2f2f] border-gray-200 dark:border-[#404040]" role="menu">
                         <DropdownMenuItem 
                           onClick={() => startRename(chat)} 
                           className="text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#404040]"
+                          role="menuitem"
                         >
-                          <Edit3 className="w-4 h-4 mr-2" />
+                          <Edit3 className="w-4 h-4 mr-2" aria-hidden="true" />
                           Rename
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => deleteChat(chat.id)} className="text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-[#404040]">
-                          <Trash2 className="w-4 h-4 mr-2" />
+                        <DropdownMenuItem onClick={() => deleteChat(chat.id)} className="text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-[#404040]" role="menuitem">
+                          <Trash2 className="w-4 h-4 mr-2" aria-hidden="true" />
                           Delete
                         </DropdownMenuItem>
                       </DropdownMenuContent>
@@ -209,7 +223,7 @@ function SidebarContent({
             )}
           </div>
         </ScrollArea>
-      </div>
+      </section>
 
       {/* Rename Dialog */}
       <Dialog open={!!renamingChat} onOpenChange={cancelRename}>
@@ -243,7 +257,7 @@ function SidebarContent({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </aside>
   )
 }
 
