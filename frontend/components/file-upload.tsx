@@ -57,10 +57,34 @@ export function FileUpload({ onUpload, children }: FileUploadProps) {
         accept="image/*,.pdf,.doc,.docx,.txt"
         onChange={(e) => e.target.files && handleFileSelect(e.target.files)}
         className="hidden"
+        aria-label="Select files to upload"
+        aria-describedby="file-upload-help"
+        disabled={isUploading}
       />
-      <div onClick={handleClick} className="cursor-pointer">
+      <div 
+        onClick={handleClick} 
+        className="cursor-pointer"
+        role="button"
+        tabIndex={0}
+        aria-label="Open file selector"
+        aria-describedby="file-upload-help"
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            handleClick()
+          }
+        }}
+      >
         {children}
       </div>
+      <div id="file-upload-help" className="sr-only">
+        Click to select files. Supported formats: images, PDF, Word documents, and text files.
+      </div>
+      {isUploading && (
+        <div className="sr-only" aria-live="polite">
+          Uploading files...
+        </div>
+      )}
     </>
   )
 }
