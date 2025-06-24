@@ -25,7 +25,6 @@ export default function ChatPage() {
   }
 
   const handleMessageSent = useCallback(() => {
-    // Trigger sidebar refresh when a message is sent
     setRefreshSidebar(prev => prev + 1)
   }, [])
 
@@ -33,13 +32,11 @@ export default function ChatPage() {
     setCurrentChatId(newChatId)
   }, [])
 
-  // Check if current chat still exists when sidebar refreshes
   useEffect(() => {
     if (currentChatId && refreshSidebar > 0) {
       fetch(`/api/chat?chatId=${currentChatId}&userId=${userId}`)
         .then((res) => {
           if (!res.ok) {
-            // Chat was deleted, create a new one
             setCurrentChatId(undefined)
             setInitialMessages([])
           }

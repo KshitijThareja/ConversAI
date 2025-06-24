@@ -7,7 +7,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Settings, BrainIcon } from "lucide-react"
 import { useTheme } from "next-themes"
 import { useUser } from "@clerk/nextjs"
 
@@ -60,7 +59,6 @@ export function SettingsModal({ children }: SettingsModalProps) {
       <DialogContent className="sm:max-w-[425px] bg-white dark:bg-[#2f2f2f] border-gray-200 dark:border-[#404040]">
         <DialogHeader>
           <DialogTitle className="text-gray-900 dark:text-white flex items-center gap-2">
-            <Settings className="w-5 h-5" />
             Settings
           </DialogTitle>
         </DialogHeader>
@@ -72,7 +70,7 @@ export function SettingsModal({ children }: SettingsModalProps) {
               <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-3">Theme</h3>
               <RadioGroup value={theme} onValueChange={handleThemeChange} className="space-y-3">
                 <div className="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-[#404040] transition-colors">
-                  <RadioGroupItem value="light" id="light" className="border-gray-300 dark:border-gray-600" />
+                  <RadioGroupItem value="light" id="light" className="border-gray-300 dark:border-gray-600 radio-small" />
                   <Label htmlFor="light" className="flex items-center gap-3 cursor-pointer flex-1">
                     <div>
                       <div className="font-medium text-gray-900 dark:text-white">Light</div>
@@ -82,7 +80,7 @@ export function SettingsModal({ children }: SettingsModalProps) {
                 </div>
 
                 <div className="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-[#404040] transition-colors">
-                  <RadioGroupItem value="dark" id="dark" className="border-gray-300 dark:border-gray-600" />
+                  <RadioGroupItem value="dark" id="dark" className="border-gray-300 dark:border-gray-600 radio-small" />
                   <Label htmlFor="dark" className="flex items-center gap-3 cursor-pointer flex-1">
                     <div>
                       <div className="font-medium text-gray-900 dark:text-white">Dark</div>
@@ -92,7 +90,7 @@ export function SettingsModal({ children }: SettingsModalProps) {
                 </div>
 
                 <div className="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-[#404040] transition-colors">
-                  <RadioGroupItem value="system" id="system" className="border-gray-300 dark:border-gray-600" />
+                  <RadioGroupItem value="system" id="system" className="border-gray-300 dark:border-gray-600 radio-small" />
                   <Label htmlFor="system" className="flex items-center gap-3 cursor-pointer flex-1">
                     <div>
                       <div className="font-medium text-gray-900 dark:text-white">System</div>
@@ -134,7 +132,6 @@ export function SettingsModal({ children }: SettingsModalProps) {
         <DialogContent className="max-w-xl bg-white dark:bg-[#2f2f2f] border-gray-200 dark:border-[#404040]">
           <DialogHeader>
             <DialogTitle className="text-gray-900 dark:text-white flex items-center gap-2">
-              <BrainIcon className="w-5 h-5" />
               Memories
             </DialogTitle>
           </DialogHeader>

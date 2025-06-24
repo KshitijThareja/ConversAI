@@ -30,32 +30,24 @@ interface SidebarProps {
   refreshTrigger?: number
 }
 
-function SidebarContent({ currentChatId, onChatSelect, onNewChat, refreshTrigger }: SidebarProps) {
-  const [chats, setChats] = useState<Chat[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+function SidebarContent({ 
+  currentChatId, 
+  onChatSelect, 
+  onNewChat, 
+  refreshTrigger,
+  chats,
+  setChats,
+  isLoading,
+  userId
+}: SidebarProps & {
+  chats: Chat[]
+  setChats: (chats: Chat[] | ((prev: Chat[]) => Chat[])) => void
+  isLoading: boolean
+  userId: string
+}) {
   const [renamingChat, setRenamingChat] = useState<string | null>(null)
   const [newTitle, setNewTitle] = useState("")
   const { isOpen, isMobile, toggleSidebar, closeSidebar } = useSidebar()
-  const { user } = useUser()
-  const userId = user?.id || "default-user"
-
-  const fetchChats = async () => {
-    try {
-      const response = await fetch(`/api/chat?userId=${userId}`)
-      if (response.ok) {
-        const data = await response.json()
-        setChats(data || [])
-      }
-    } catch (error) {
-      console.error("Failed to fetch chats:", error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    fetchChats()
-  }, [userId, refreshTrigger])
 
   const handleNewChat = async () => {
     onNewChat()
@@ -72,7 +64,6 @@ function SidebarContent({ currentChatId, onChatSelect, onNewChat, refreshTrigger
       const response = await fetch(`/api/chat?chatId=${chatId}&userId=${userId}`, { method: "DELETE" })
       if (response.ok) {
         setChats((prev) => prev.filter((chat) => chat.id !== chatId))
-        // If the deleted chat was the current one, create a new chat
         if (currentChatId === chatId) {
           onNewChat()
         }
@@ -178,41 +169,43 @@ function SidebarContent({ currentChatId, onChatSelect, onNewChat, refreshTrigger
             {isLoading ? (
               <div className="text-center text-gray-400 py-4 text-sm">Loading...</div>
             ) : (
-              chats.map((chat) => (
-                <div
-                  key={chat.id}
-                  className={`group flex items-center gap-3 p-2 rounded-lg cursor-pointer hover:bg-gray-100 dark:hover:bg-[#2f2f2f] transition-colors ${currentChatId === chat.id ? "bg-gray-100 dark:bg-[#2f2f2f]" : ""}`}
-                  onClick={() => handleChatSelect(chat.id)}
-                >
-                  <MessageSquare className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                  <span className="flex-1 truncate text-sm text-gray-700 dark:text-gray-200">{getMessagePreviewText(chat.title)}</span>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="opacity-0 group-hover:opacity-100 h-6 w-6 p-0 text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-[#404040]"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <MoreHorizontal className="w-3 h-3" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="bg-white dark:bg-[#2f2f2f] border-gray-200 dark:border-[#404040]">
-                      <DropdownMenuItem 
-                        onClick={() => startRename(chat)} 
-                        className="text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#404040]"
-                      >
-                        <Edit3 className="w-4 h-4 mr-2" />
-                        Rename
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => deleteChat(chat.id)} className="text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-[#404040]">
-                        <Trash2 className="w-4 h-4 mr-2" />
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              ))
+              [...chats]
+                .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                .map((chat) => (
+                  <div
+                    key={chat.id}
+                    className={`group flex items-center gap-3 p-2 rounded-lg cursor-pointer hover:bg-gray-100 dark:hover:bg-[#2f2f2f] transition-colors ${currentChatId === chat.id ? "bg-gray-100 dark:bg-[#2f2f2f]" : ""}`}
+                    onClick={() => handleChatSelect(chat.id)}
+                  >
+                    <MessageSquare className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                    <span className="flex-1 truncate text-sm text-gray-700 dark:text-gray-200">{getMessagePreviewText(chat.title)}</span>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="opacity-0 group-hover:opacity-100 h-6 w-6 p-0 text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-[#404040]"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <MoreHorizontal className="w-3 h-3" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="bg-white dark:bg-[#2f2f2f] border-gray-200 dark:border-[#404040]">
+                        <DropdownMenuItem 
+                          onClick={() => startRename(chat)} 
+                          className="text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#404040]"
+                        >
+                          <Edit3 className="w-4 h-4 mr-2" />
+                          Rename
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => deleteChat(chat.id)} className="text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-[#404040]">
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                ))
             )}
           </div>
         </ScrollArea>
@@ -255,13 +248,35 @@ function SidebarContent({ currentChatId, onChatSelect, onNewChat, refreshTrigger
 }
 
 export function Sidebar(props: SidebarProps) {
+  const [chats, setChats] = useState<Chat[]>([])
+  const [isLoading, setIsLoading] = useState(true)
   const { isOpen, isMobile, toggleSidebar } = useSidebar()
+  const { user } = useUser()
+  const userId = user?.id || "default-user"
+
+  const fetchChats = async () => {
+    try {
+      const response = await fetch(`/api/chat?userId=${userId}`)
+      if (response.ok) {
+        const data = await response.json()
+        setChats(data || [])
+      }
+    } catch (error) {
+      console.error("Failed to fetch chats:", error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchChats()
+  }, [userId, props.refreshTrigger])
 
   if (isMobile) {
     return (
       <Sheet open={isOpen} onOpenChange={toggleSidebar}>
         <SheetContent side="left" className="w-[280px] p-0 bg-gray-50 dark:bg-[#171717] border-gray-200 dark:border-[#2f2f2f]">
-          <SidebarContent {...props} />
+          <SidebarContent {...props} chats={chats} setChats={setChats} isLoading={isLoading} userId={userId} />
         </SheetContent>
       </Sheet>
     )
@@ -271,38 +286,21 @@ export function Sidebar(props: SidebarProps) {
     <div className={`transition-all duration-300 ease-in-out border-r border-gray-200 dark:border-[#2f2f2f] ${isOpen ? "w-[250px]" : "w-[55px]"} overflow-hidden flex flex-col`}>
       {isOpen ? (
         <div className="w-[250px] h-full">
-          <SidebarContent {...props} />
+          <SidebarContent {...props} chats={chats} setChats={setChats} isLoading={isLoading} userId={userId} />
         </div>
       ) : (
-        <SidebarCollapsed {...props} />
+        <SidebarCollapsed {...props} chats={chats} />
       )}
     </div>
   )
 }
 
-function SidebarCollapsed(props: SidebarProps) {
-  const [chats, setChats] = useState<Chat[]>([])
-  const { user } = useUser()
-  const userId = user?.id || "default-user"
-
-  useEffect(() => {
-    const fetchChats = async () => {
-      try {
-        const response = await fetch(`/api/chat?userId=${userId}`)
-        if (response.ok) {
-          const data = await response.json()
-          setChats(data || [])
-        }
-      } catch (error) {
-        console.error("Failed to fetch chats:", error)
-      }
-    }
-    fetchChats()
-  }, [userId])
+function SidebarCollapsed(props: SidebarProps & { chats: Chat[] }) {
+  const { toggleSidebar } = useSidebar()
 
   return (
     <div className="w-[55px] h-full flex flex-col items-center py-2">
-      <div className="relative w-10 h-10 mt-1 flex items-center justify-center group cursor-pointer" onClick={useSidebar().toggleSidebar}>
+      <div className="relative w-10 h-10 mt-1 flex items-center justify-center group cursor-pointer" onClick={toggleSidebar}>
         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 w-10 h-10 rounded-md text-gray-900 dark:text-white bg-gray-100 dark:bg-[#2f2f2f]">
           <SidebarIcon className="w-6 h-6" />
         </div>
@@ -317,7 +315,7 @@ function SidebarCollapsed(props: SidebarProps) {
           <Plus className="w-6 h-6 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2f2f2f]" />
         </Button>
         <SearchModal
-          chats={chats}
+          chats={props.chats}
           currentChatId={props.currentChatId}
           onChatSelect={props.onChatSelect}
           onNewChat={props.onNewChat}

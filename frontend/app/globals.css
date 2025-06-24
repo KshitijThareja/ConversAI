@@ -243,3 +243,17 @@ textarea:focus-visible {
     min-width: 44px;
   }
 }
+
+.radio-small {
+  width: 16px !important;
+  height: 16px !important;
+  min-width: 16px !important;
+  min-height: 16px !important;
+}
+
+.radio-small:before, .radio-small:after {
+  width: 16px !important;
+  height: 16px !important;
+  min-width: 16px !important;
+  min-height: 16px !important;
+}

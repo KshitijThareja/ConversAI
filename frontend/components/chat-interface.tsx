@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Avatar } from "@/components/ui/avatar"
 import { Textarea } from "@/components/ui/textarea"
-import { Edit3, Check, X, Copy, RefreshCw, Plus, Settings, Menu, ArrowUp, FileText } from "lucide-react"
+import { Edit3, X, Copy, RefreshCw, Plus, Settings, ArrowUp, FileText } from "lucide-react"
 import type { Message, Attachment, ChatMessage, MessagePart } from "@/lib/types"
 import { MessageContent } from "./message-content"
 import { SettingsModal } from "./settings-modal"
@@ -20,6 +20,13 @@ interface ChatInterfaceProps {
   onMessageSent?: () => void
   onChatIdUpdate?: (newChatId: string) => void
 }
+
+const HamburgerIcon = () => (
+  <svg data-rtl-flip="true" className="icon-lg mx-2" width="20" height="20" viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <path d="M11.6663 12.6686L11.801 12.6823C12.1038 12.7445 12.3313 13.0125 12.3313 13.3337C12.3311 13.6547 12.1038 13.9229 11.801 13.985L11.6663 13.9987H3.33325C2.96609 13.9987 2.66839 13.7008 2.66821 13.3337C2.66821 12.9664 2.96598 12.6686 3.33325 12.6686H11.6663ZM16.6663 6.00163L16.801 6.0153C17.1038 6.07747 17.3313 6.34546 17.3313 6.66667C17.3313 6.98788 17.1038 7.25586 16.801 7.31803L16.6663 7.33171H3.33325C2.96598 7.33171 2.66821 7.03394 2.66821 6.66667C2.66821 6.2994 2.96598 6.00163 3.33325 6.00163H16.6663Z" 
+    stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+  </svg>
+)
 
 export function ChatInterface({ chatId, initialMessages = [], onMessageSent, onChatIdUpdate }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages as ChatMessage[])
@@ -59,7 +66,6 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent, onC
     adjustTextareaHeight()
   }, [input])
 
-  // Update messages when initialMessages prop changes (when switching chats)
   useEffect(() => {
     setMessages(initialMessages as ChatMessage[])
   }, [initialMessages])
@@ -75,7 +81,6 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent, onC
 
     setIsLoading(true)
     try {
-      // 1. PATCH to update the message content in the backend
       const patchRes = await fetch(`/api/chat?chatId=${chatId}&userId=${userId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -83,7 +88,6 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent, onC
       })
       if (!patchRes.ok) throw new Error("Failed to update message")
 
-      // 2. PATCH to trim the chat after the edited message
       const trimRes = await fetch(`/api/chat?chatId=${chatId}&userId=${userId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -91,7 +95,6 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent, onC
       })
       if (!trimRes.ok) throw new Error("Failed to trim chat after edit")
 
-      // 3. GET the updated chat from the backend to ensure state is in sync
       const getRes = await fetch(`/api/chat?chatId=${chatId}&userId=${userId}`)
       if (!getRes.ok) throw new Error("Failed to fetch updated chat")
       const chatData = await getRes.json()
@@ -100,8 +103,6 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent, onC
       setEditingMessageId(null)
       setEditContent("")
 
-      // 4. POST to regenerate the assistant's answer
-      // Do NOT re-add the user message, just POST the trimmed messages as context
       setIsLoading(true)
       const response = await fetch("/api/chat", {
         method: "POST",
@@ -114,7 +115,6 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent, onC
       if (!reader) throw new Error("No response body reader available")
       const decoder = new TextDecoder()
       let fullResponse = ""
-      // Add assistant message placeholder
       const assistantMessageId = `msg-${Date.now() + 1}`
       setMessages((prev) => [
         ...trimmedMessages,
@@ -175,7 +175,7 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent, onC
     const newUserMessage: Message = {
       id: `msg-${Date.now()}`,
       role: "user",
-      content: content as any, // Message type expects string, but we use parts
+      content: content as any,
       timestamp: new Date(),
     }
     setMessages((prev) => [...prev, newUserMessage] as ChatMessage[])
@@ -210,7 +210,6 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent, onC
       const decoder = new TextDecoder()
       let fullResponse = ""
       
-      // Add assistant message placeholder
       const assistantMessageId = `msg-${Date.now() + 1}`
       setMessages((prev) => [
         ...prev.slice(0, -1), 
@@ -233,7 +232,6 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent, onC
         console.log("Received chunk:", chunk)
         fullResponse += chunk
         
-        // Update the assistant message with accumulated response
         setMessages((prev) => 
           prev.map(msg => 
             msg.id === assistantMessageId 
@@ -243,18 +241,14 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent, onC
         )
       }
       
-      // Call onMessageSent when streaming is complete
       onMessageSent?.()
-      
-      // If this was a new chat (chatId was undefined), update the parent with the new chat ID
+        
       if (!chatId && onChatIdUpdate) {
-        // Get the most recent chat (should be the one we just created)
         try {
           const chatResponse = await fetch(`/api/chat?userId=${userId}`)
           if (chatResponse.ok) {
             const chats = await chatResponse.json()
             if (chats.length > 0) {
-              // Get the most recent chat (should be the one we just created)
               const latestChat = chats[0]
               onChatIdUpdate(latestChat.id)
             }
@@ -265,7 +259,6 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent, onC
       }
     } catch (error) {
       console.error("Error:", error)
-      // Remove the assistant message if there was an error
       setMessages((prev) => prev.filter(msg => msg.id !== `msg-${Date.now() + 1}`))
     } finally {
       setIsLoading(false)
@@ -276,30 +269,23 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent, onC
     navigator.clipboard.writeText(text)
   }
 
-  // Regenerate the last assistant response
   const handleRegenerateLastAssistant = async () => {
-    // Find the last user message
     const lastUserIndex = [...messages].reverse().findIndex(m => m.role === "user")
     if (lastUserIndex === -1) return
-    // Index from the start
     const userIdx = messages.length - 1 - lastUserIndex
-    // Only regenerate if the last message is assistant and right after the last user message
     if (messages.length < 2 || messages[messages.length - 1].role !== "assistant" || messages[messages.length - 2].role !== "user") return
     setIsLoading(true)
     try {
-      // 1. Remove the last assistant message from the backend
       await fetch(`/api/chat?chatId=${chatId}&userId=${userId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "removeLastAssistant" }),
       })
-      // 2. Fetch the updated chat
       const getRes = await fetch(`/api/chat?chatId=${chatId}&userId=${userId}`)
       if (!getRes.ok) throw new Error("Failed to fetch updated chat")
       const chatData = await getRes.json()
       const trimmedMessages = chatData.messages || []
       setMessages(trimmedMessages as ChatMessage[])
-      // 3. POST to regenerate the assistant's answer
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -343,20 +329,14 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent, onC
           <div className="flex items-center gap-2">
             {(!isOpen && isMobile) && (
               <Button size="sm" variant="ghost" onClick={toggleSidebar} className="h-8 w-8 p-0 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2f2f2f] mr-2">
-                <Menu className="w-4 h-4" />
+                {/* Replace Menu icon with HamburgerIcon */}
+                <HamburgerIcon />
               </Button>
             )}
             <span className="text-gray-900 dark:text-white font-medium text-lg">ConversAI</span>
           </div>
           <div className="flex items-center gap-2">
             <SignedIn>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="hidden sm:flex text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2f2f2f]"
-              >
-                Share
-              </Button>
               <SettingsModal>
                 <Button
                   size="sm"
@@ -472,15 +452,12 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent, onC
         <div className="flex items-center gap-2">
           {(!isOpen && isMobile) && (
             <Button size="sm" variant="ghost" onClick={toggleSidebar} className="h-8 w-8 p-0 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2f2f2f] mr-2">
-              <Menu className="w-4 h-4" />
+              <HamburgerIcon />
             </Button>
           )}
           <span className="text-gray-900 dark:text-white font-medium text-lg">ConversAI</span>
         </div>
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="ghost" className="hidden sm:flex text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2f2f2f]">
-            Share
-          </Button>
           <SettingsModal>
             <Button size="sm" variant="ghost" className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2f2f2f] h-8 w-8 p-0">
               <Settings className="w-4 h-4" />
@@ -572,7 +549,7 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent, onC
                     </div>
                   )}
                   {isAssistant && (
-                    <div className="flex gap-1 mt-2 ml-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                    <div className="flex gap-1 mt-2 ml-4">
                       <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-gray-400 hover:text-black dark:hover:text-white" onClick={() => copyToClipboard(Array.isArray(message.content) ? message.content.filter((p: any) => p.type === 'text').map((p: any) => p.text).join("\n") : message.content)}>
                         <Copy className="w-3 h-3" />
                       </Button>

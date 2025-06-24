@@ -21,7 +21,6 @@ async function getChatHistory(userId: string, chatId?: string) {
   const query = chatId ? { userId, chatId } : { userId }
   const chats = await collection.find(query).toArray()
   
-  // Clean up empty messages from the database
   for (const chat of chats) {
     if (chat.messages && Array.isArray(chat.messages)) {
       const cleanedMessages = chat.messages.filter(hasNonEmptyContent)
@@ -42,16 +41,10 @@ async function getChatHistory(userId: string, chatId?: string) {
 async function saveMessage(userId: string, chatId: string, message: any) {
   const db = await connectToDatabase()
   const collection = db.collection("chats")
-  
-  // Check if this chat already exists in the database
   const existingChat = await collection.findOne({ userId, chatId })
-  
-  // If this is a new chat (no chatId or chatId is "default"), create a unique chatId
   const finalChatId = chatId === "default" || !chatId ? `chat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` : chatId
   
-  // If this is the first message in a new chat (no existing chat found)
   if (!existingChat && message.role === "user") {
-    // Extract text content for title, handling both string and MessagePart[] formats
     let titleText = ""
     if (typeof message.content === 'string') {
       titleText = message.content
@@ -76,7 +69,6 @@ async function saveMessage(userId: string, chatId: string, message: any) {
     )
     return finalChatId
   } else {
-    // Add message to existing chat
     await collection.updateOne(
       { userId, chatId: finalChatId },
       { $push: { messages: { ...message, createdAt: new Date() } } },
@@ -108,17 +100,14 @@ async function renameChat(userId: string, chatId: string, newTitle: string) {
 async function updateMessage(userId: string, chatId: string, messageIndex: number, newContent: string) {
   const db = await connectToDatabase()
   const collection = db.collection("chats")
-  
-  // Get the current chat to find the message
+
   const chat = await collection.findOne({ userId, chatId })
   if (!chat || !chat.messages || !chat.messages[messageIndex]) {
     throw new Error("Message not found")
   }
   
-  // Store original content if not already stored
   const originalContent = chat.messages[messageIndex].originalContent || chat.messages[messageIndex].content
   
-  // Create a new version before making changes
   const newVersion: any = {
     id: `version_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
     messages: [...chat.messages],
@@ -126,7 +115,6 @@ async function updateMessage(userId: string, chatId: string, messageIndex: numbe
     isCurrent: false
   }
   
-  // Update the message
   const result = await collection.updateOne(
     { userId, chatId },
     { 
@@ -147,16 +135,13 @@ async function regenerateFromMessage(userId: string, chatId: string, messageInde
   const db = await connectToDatabase()
   const collection = db.collection("chats")
   
-  // Get the current chat
   const chat = await collection.findOne({ userId, chatId })
   if (!chat || !chat.messages || !chat.messages[messageIndex]) {
     throw new Error("Message not found")
   }
   
-  // Get messages up to the specified message (inclusive)
   const messagesUpToIndex = chat.messages.slice(0, messageIndex + 1)
   
-  // Remove any subsequent messages (they will be regenerated)
   const result = await collection.updateOne(
     { userId, chatId },
     { $set: { messages: messagesUpToIndex } }
@@ -169,7 +154,6 @@ async function switchToVersion(userId: string, chatId: string, versionId: string
   const db = await connectToDatabase()
   const collection = db.collection("chats")
   
-  // Get the chat and find the specified version
   const chat = await collection.findOne({ userId, chatId })
   if (!chat || !chat.versions) {
     throw new Error("Chat or versions not found")
@@ -180,7 +164,6 @@ async function switchToVersion(userId: string, chatId: string, versionId: string
     throw new Error("Version not found")
   }
   
-  // Update the chat to use this version and mark it as current
   const result = await collection.updateOne(
     { userId, chatId },
     { 
@@ -195,7 +178,6 @@ async function switchToVersion(userId: string, chatId: string, versionId: string
     }
   )
   
-  // Update the isCurrent flag for the selected version
   await collection.updateOne(
     { userId, chatId, "versions.id": versionId },
     { $set: { "versions.$.isCurrent": true } }
@@ -215,14 +197,12 @@ export async function GET(req: NextRequest) {
     }
 
     if (chatId) {
-      // Fetch specific chat messages
       const chats = await getChatHistory(userId, chatId)
       const chat = chats[0]
       if (!chat) {
         return new NextResponse(JSON.stringify({ error: "Chat not found" }), { status: 404 })
       }
       
-      // Return messages for the specific chat
       return new NextResponse(JSON.stringify({ 
         id: chat.chatId || chat._id?.toString(),
         title: chat.title || (chat.messages?.[0]?.content?.slice(0, 30) || "Untitled Chat"),
@@ -233,12 +213,11 @@ export async function GET(req: NextRequest) {
         headers: { "Content-Type": "application/json" } 
       })
     } else {
-      // Fetch all chats for the user
       const chats = await getChatHistory(userId)
-      // Return only id and title for sidebar
       const chatList = chats.map(chat => ({
         id: chat.chatId || chat._id?.toString(),
-        title: chat.title || (chat.messages?.[0]?.content?.slice(0, 30) || "Untitled Chat")
+        title: chat.title || (chat.messages?.[0]?.content?.slice(0, 30) || "Untitled Chat"),
+        createdAt: chat.createdAt
       }))
       return new NextResponse(JSON.stringify(chatList), { 
         headers: { "Content-Type": "application/json" } 
@@ -256,7 +235,6 @@ export async function POST(req: NextRequest) {
     const { messages, chatId, userId } = await req.json()
     console.log("Request data:", { messages: messages?.length, chatId, userId })
 
-    // Save the user message only if it's new (not already present at that index)
     let actualChatId = chatId;
     const db = await connectToDatabase();
     const collection = db.collection("chats");
@@ -269,7 +247,6 @@ export async function POST(req: NextRequest) {
     }
     const userMessage = messages[messages.length - 1];
 
-    // Only save if the last message is not already present in the DB
     if (
       !lastDbMessage ||
       lastDbMessage.content !== userMessage.content ||
@@ -281,11 +258,9 @@ export async function POST(req: NextRequest) {
       console.log("User message already present, skipping save.");
     }
 
-    // Fetch chat history and manage context window
     const history = await getChatHistory(userId, actualChatId)
     console.log("Chat history fetched:", history.length)
     
-    // Clean up empty messages from the loaded history
     const cleanedHistory = history.map(chat => ({
       ...chat,
       messages: chat.messages?.filter(hasNonEmptyContent) || []
@@ -296,7 +271,6 @@ export async function POST(req: NextRequest) {
     const trimmedMessages = trimMessagesToTokenLimit(allMessages, MAX_TOKENS)
     console.log("Trimmed messages:", trimmedMessages.length)
 
-    // Save new message to memory with mem0
     if (trimmedMessages.length > 0) {
       try {
         const geminiMessages = trimmedMessages.map((msg: any) => ({
@@ -316,13 +290,11 @@ export async function POST(req: NextRequest) {
         }
       } catch (error) {
         console.error('Error saving to mem0:', error)
-        // Continue execution even if mem0 fails
       }
     }
 
     console.log("About to call streamText with messages:", trimmedMessages)
     
-    // Convert messages to proper format for Vercel AI SDK
     const validMessagesForAPI = trimmedMessages
       .filter(msg => 
         hasNonEmptyContent(msg) &&
@@ -334,7 +306,6 @@ export async function POST(req: NextRequest) {
         }
         
         if (Array.isArray(msg.content)) {
-          // Convert MessagePart[] to proper format for Vercel AI SDK
           const textParts = msg.content.filter((part: any) => part.type === 'text')
           const fileParts = msg.content.filter((part: any) => part.type === 'file')
           
@@ -343,7 +314,6 @@ export async function POST(req: NextRequest) {
             content = "Please analyze the attached file(s)."
           }
           
-          // Add file attachments if any
           if (fileParts.length > 0) {
             const attachments = fileParts.map((part: any) => ({
               type: 'file',
@@ -356,7 +326,6 @@ export async function POST(req: NextRequest) {
               content,
               attachments: attachments.map((a: any) => ({ name: a.name, mimeType: a.mimeType, dataLength: a.data.length }))
             })
-            // For Vercel AI SDK, use the content array format
             const contentArray = [
               { type: 'text', text: content },
               ...attachments
@@ -379,7 +348,6 @@ export async function POST(req: NextRequest) {
       hasAttachments: !!(msg as any).attachments
     })))
     
-    // Check if we have any valid messages
     if (validMessagesForAPI.length === 0) {
       console.log("No valid messages found, returning default response")
       return new NextResponse("Hello! I'm here to help. How can I assist you today?", {
@@ -387,7 +355,6 @@ export async function POST(req: NextRequest) {
       })
     }
     
-    // Stream response using Gemini
     try {
       console.log("Google API Key configured:", !!process.env.GOOGLE_GENERATIVE_AI_API_KEY)
       
@@ -399,7 +366,6 @@ export async function POST(req: NextRequest) {
       
       console.log("streamText called successfully, creating stream")
 
-      // Stream response to client and collect full response
       let fullResponse = ""
       const stream = new ReadableStream({
         async start(controller) {
@@ -415,7 +381,6 @@ export async function POST(req: NextRequest) {
             console.log(`Streaming completed after ${chunkCount} chunks, fullResponse:`, fullResponse)
             controller.close()
             
-            // Save full response after streaming is complete
             await saveMessage(userId, actualChatId, {
               role: "assistant",
               content: fullResponse,
@@ -508,7 +473,6 @@ export async function PATCH(req: NextRequest) {
         return new NextResponse(JSON.stringify({ error: "Message not found" }), { status: 404 })
       }
       
-      // Return the updated chat data
       const db = await connectToDatabase()
       const collection = db.collection("chats")
       const updatedChat = await collection.findOne({ userId, chatId })
@@ -533,7 +497,6 @@ export async function PATCH(req: NextRequest) {
       })
     }
 
-    // NEW: Remove the last assistant message
     if (action === "removeLastAssistant") {
       const db = await connectToDatabase();
       const collection = db.collection("chats");
@@ -541,7 +504,6 @@ export async function PATCH(req: NextRequest) {
       if (!chat || !Array.isArray(chat.messages) || chat.messages.length === 0) {
         return new NextResponse(JSON.stringify({ error: "Chat or messages not found" }), { status: 404 })
       }
-      // Find the last assistant message
       let lastIdx = chat.messages.length - 1;
       while (lastIdx >= 0 && chat.messages[lastIdx].role !== "assistant") {
         lastIdx--;
@@ -549,7 +511,6 @@ export async function PATCH(req: NextRequest) {
       if (lastIdx === -1) {
         return new NextResponse(JSON.stringify({ error: "No assistant message to remove" }), { status: 400 })
       }
-      // Remove the last assistant message
       const newMessages = chat.messages.slice(0, lastIdx).concat(chat.messages.slice(lastIdx + 1));
       await collection.updateOne(
         { userId, chatId },
@@ -565,7 +526,6 @@ export async function PATCH(req: NextRequest) {
         return new NextResponse(JSON.stringify({ error: "Version not found" }), { status: 404 })
       }
       
-      // Return the updated chat data
       const db = await connectToDatabase()
       const collection = db.collection("chats")
       const updatedChat = await collection.findOne({ userId, chatId })
@@ -585,7 +545,6 @@ export async function PATCH(req: NextRequest) {
   }
 }
 
-// Helper function to trim messages based on token limit
 function trimMessagesToTokenLimit(messages: any[], maxTokens: number): any[] {
   let tokenCount = 0
   const trimmed = []
@@ -600,23 +559,19 @@ function trimMessagesToTokenLimit(messages: any[], maxTokens: number): any[] {
   return trimmed
 }
 
-// Rough token estimation (simplified)
 function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4)
 }
 
-// Helper to check if a message has non-empty content (string or MessagePart[])
 function hasNonEmptyContent(msg: any): boolean {
   if (!msg.content) return false;
   if (typeof msg.content === 'string') {
     return msg.content.trim() !== '';
   }
   if (Array.isArray(msg.content)) {
-    // Check for text content
     const hasText = msg.content.some(
       (part: any) => part.type === 'text' && part.text && part.text.trim() !== ''
     );
-    // Check for file content
     const hasFile = msg.content.some(
       (part: any) => part.type === 'file'
     );

@@ -14,7 +14,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
   try {
     const result = await memory.getAll({ user_id: userId })
     console.log("Memories fetched successfully:", result)
-    // Return the full memory objects, not just the content
     const memories = result || []
     console.log("Processed memories:", memories)
     return NextResponse.json({ memories })
