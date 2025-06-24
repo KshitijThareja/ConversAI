@@ -1,4 +1,4 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { v2 as cloudinary } from "cloudinary"
 
 cloudinary.config({
@@ -8,43 +8,30 @@ cloudinary.config({
 })
 
 export async function POST(req: NextRequest) {
-  try {
-    const formData = await req.formData()
-    const file = formData.get("file") as File
+  const formData = await req.formData()
+  const files = formData.getAll("file") as File[]
 
-    if (!file) {
-      return NextResponse.json({ error: "No file provided" }, { status: 400 })
-    }
-
-    // Convert file to buffer
-    const bytes = await file.arrayBuffer()
-    const buffer = Buffer.from(bytes)
-
-    // Upload to Cloudinary
-    const result = (await new Promise((resolve, reject) => {
-      cloudinary.uploader
-        .upload_stream(
-          {
-            resource_type: "auto",
-            folder: "conversai",
-          },
-          (error, result) => {
-            if (error) reject(error)
-            else resolve(result)
-          },
-        )
-        .end(buffer)
-    })) as any
-
-    return NextResponse.json({
-      id: result.public_id,
-      name: file.name,
-      type: file.type,
-      url: result.secure_url,
-      size: file.size,
-    })
-  } catch (error) {
-    console.error("Upload error:", error)
-    return NextResponse.json({ error: "Upload failed" }, { status: 500 })
+  if (files.length === 0) {
+    return NextResponse.json({ error: "No files uploaded" }, { status: 400 })
   }
+
+  const uploadResults = await Promise.all(
+    files.map(async (file) => {
+      const uploadResponse = await new Promise(async (resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          { resource_type: "auto" },
+          (error, result) => (error ? reject(error) : resolve(result))
+        )
+        stream.end(Buffer.from(await file.arrayBuffer()))
+      })
+      return {
+        id: (uploadResponse as any).public_id,
+        name: file.name,
+        url: (uploadResponse as any).secure_url,
+        type: file.type,
+      }
+    })
+  )
+
+  return NextResponse.json({ files: uploadResults })
 }

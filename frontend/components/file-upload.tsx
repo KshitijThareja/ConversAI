@@ -6,7 +6,7 @@ import { useRef, useState } from "react"
 import type { Attachment } from "@/lib/types"
 
 interface FileUploadProps {
-  onUpload: (attachments: Attachment[]) => void
+  onUpload: (files: FileList) => void | Promise<void>
   children: React.ReactNode
 }
 
@@ -36,7 +36,7 @@ export function FileUpload({ onUpload, children }: FileUploadProps) {
 
     try {
       const attachments = await Promise.all(uploadPromises)
-      onUpload(attachments)
+      onUpload(files)
     } catch (error) {
       console.error("Upload error:", error)
     } finally {
