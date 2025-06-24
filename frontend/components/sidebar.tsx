@@ -134,7 +134,7 @@ function SidebarContent({
               size="sm"
               variant="ghost"
               onClick={closeSidebar}
-              className="h-8 w-8 p-0 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2f2f2f] md:hidden"
+              className="h-8 w-8 p-0 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2f2f2f] md:hidden focus:outline-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
               aria-label="Close sidebar"
             >
               <X className="w-4 h-4" />
