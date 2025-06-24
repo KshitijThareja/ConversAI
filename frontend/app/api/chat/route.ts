@@ -311,6 +311,8 @@ export async function POST(req: NextRequest) {
       console.error('Error fetching user memory for context:', err);
     }
 
+    console.log("Memory context:", memoryContext);
+
     type RoleType = 'user' | 'assistant' | 'system';
     let contextMessages: { role: RoleType; content: string }[] = [];
     if (memoryContext) {
