@@ -44,6 +44,13 @@ async function saveMessage(userId: string, chatId: string, message: any) {
   const existingChat = await collection.findOne({ userId, chatId })
   const finalChatId = chatId === "default" || !chatId ? `chat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` : chatId
   
+  // Ensure the message has a unique id
+  const messageWithId = {
+    ...message,
+    id: message.id || `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    createdAt: new Date()
+  }
+
   if (!existingChat && message.role === "user") {
     let titleText = ""
     if (typeof message.content === 'string') {
@@ -63,7 +70,7 @@ async function saveMessage(userId: string, chatId: string, message: any) {
           title,
           createdAt: new Date()
         },
-        $push: { messages: { ...message, createdAt: new Date() } }
+        $push: { messages: messageWithId }
       },
       { upsert: true }
     )
@@ -71,7 +78,7 @@ async function saveMessage(userId: string, chatId: string, message: any) {
   } else {
     await collection.updateOne(
       { userId, chatId: finalChatId },
-      { $push: { messages: { ...message, createdAt: new Date() } } },
+      { $push: { messages: messageWithId } },
       { upsert: true }
     )
     return finalChatId
@@ -206,7 +213,10 @@ export async function GET(req: NextRequest) {
       return new NextResponse(JSON.stringify({ 
         id: chat.chatId || chat._id?.toString(),
         title: chat.title || (chat.messages?.[0]?.content?.slice(0, 30) || "Untitled Chat"),
-        messages: chat.messages || [],
+        messages: (chat.messages || []).map((msg: any, idx: number) => ({
+          ...msg,
+          id: msg.id || `msg_${idx}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        })),
         versions: chat.versions || [],
         currentVersionId: chat.currentVersionId || null
       }), { 
@@ -367,6 +377,7 @@ export async function POST(req: NextRequest) {
       console.log("streamText called successfully, creating stream")
 
       let fullResponse = ""
+      const assistantMessageId = `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
       const stream = new ReadableStream({
         async start(controller) {
           try {
@@ -382,6 +393,7 @@ export async function POST(req: NextRequest) {
             controller.close()
             
             await saveMessage(userId, actualChatId, {
+              id: assistantMessageId,
               role: "assistant",
               content: fullResponse,
               createdAt: new Date(),
