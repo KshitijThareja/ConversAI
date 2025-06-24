@@ -13,6 +13,7 @@ import { SettingsModal } from "./settings-modal"
 import { useSidebar } from "@/contexts/sidebar-context"
 import { SignedIn, SignedOut, SignInButton, UserButton, useUser } from "@clerk/nextjs"
 import { FileUpload } from "./file-upload"
+import { v4 as uuidv4 } from 'uuid'
 
 interface ChatInterfaceProps {
   chatId?: string
@@ -67,7 +68,11 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent, onC
   }, [input])
 
   useEffect(() => {
-    setMessages(initialMessages as ChatMessage[])
+    const withIds = (initialMessages as ChatMessage[]).map((msg, idx) => ({
+      ...msg,
+      id: msg.id || `fallback-${idx}`
+    }))
+    setMessages(withIds)
   }, [initialMessages])
 
   const handleEditMessage = (messageId: string, content: string) => {
@@ -100,8 +105,6 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent, onC
       const chatData = await getRes.json()
       const trimmedMessages = chatData.messages || []
       setMessages(trimmedMessages as ChatMessage[])
-      setEditingMessageId(null)
-      setEditContent("")
 
       setIsLoading(true)
       const response = await fetch("/api/chat", {
@@ -115,7 +118,7 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent, onC
       if (!reader) throw new Error("No response body reader available")
       const decoder = new TextDecoder()
       let fullResponse = ""
-      const assistantMessageId = `msg-${Date.now() + 1}`
+      const assistantMessageId = `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
       setMessages((prev) => [
         ...trimmedMessages,
         { id: assistantMessageId, role: "assistant", content: "", timestamp: new Date() }
@@ -134,6 +137,8 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent, onC
         )
       }
       onMessageSent?.()
+      setEditingMessageId(null)
+      setEditContent("")
     } catch (error) {
       console.error("Error during message edit/regeneration:", error)
     } finally {
@@ -173,7 +178,7 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent, onC
     const textPart = input.trim() ? [{ type: 'text', text: input.trim() }] : []
     const content = [...textPart, ...pendingParts]
     const newUserMessage: Message = {
-      id: `msg-${Date.now()}`,
+      id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       role: "user",
       content: content as any,
       timestamp: new Date(),
@@ -210,15 +215,15 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent, onC
       const decoder = new TextDecoder()
       let fullResponse = ""
       
-      const assistantMessageId = `msg-${Date.now() + 1}`
+      const assistantMessageId = `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
       setMessages((prev) => [
-        ...prev.slice(0, -1), 
-        { ...newUserMessage, content: content } as ChatMessage, 
-        { 
-          id: assistantMessageId, 
-          role: "assistant", 
-          content: "", 
-          timestamp: new Date() 
+        ...prev.slice(0, -1),
+        { ...newUserMessage, content: content } as ChatMessage,
+        {
+          id: assistantMessageId,
+          role: "assistant",
+          content: "",
+          timestamp: new Date()
         } as ChatMessage
       ])
 
@@ -259,7 +264,7 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent, onC
       }
     } catch (error) {
       console.error("Error:", error)
-      setMessages((prev) => prev.filter(msg => msg.id !== `msg-${Date.now() + 1}`))
+      setMessages((prev) => prev.filter(msg => msg.id !== `msg-${Date.now() + 1}-${Math.random().toString(36).substr(2, 9)}`))
     } finally {
       setIsLoading(false)
     }
@@ -296,7 +301,8 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent, onC
       if (!reader) throw new Error("No response body reader available")
       const decoder = new TextDecoder()
       let fullResponse = ""
-      const assistantMessageId = `msg-${Date.now() + 1}`
+      const assistantMessageId = `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+      const uniqueAssistantId2 = `msg-${Date.now() + 1}-${Math.random().toString(36).substr(2, 9)}`
       setMessages((prev) => [
         ...trimmedMessages,
         { id: assistantMessageId, role: "assistant", content: "", timestamp: new Date() }
@@ -475,14 +481,26 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent, onC
             const isAssistant = message.role === "assistant"
             const isEditing = editingMessageId === message.id
             return (
-              <div
-                key={`${message.id}-${index}`}
+              <div key={message.id ? String(message.id) : `fallback-${index}`}
                 className={`flex w-full ${isUser ? "justify-end" : "justify-start"}`}
               >
                 <div className={`group relative ${isUser ? "ml-auto" : "mr-auto"}`}>
                   {/* Message content */}
                   <div className="flex flex-col">
-                    {Array.isArray(message.content)
+                    {isEditing && isUser ? (
+                      <div className="flex flex-col gap-2 bg-gray-100 dark:bg-[#303030] rounded-2xl p-3">
+                        <Textarea
+                          value={editContent}
+                          onChange={e => setEditContent(e.target.value)}
+                          className="w-full bg-transparent border-0 resize-none text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 min-h-[52px]"
+                          autoFocus
+                        />
+                        <div className="flex gap-2 justify-end">
+                          <Button size="sm" variant="outline" onClick={handleCancelEdit} disabled={isLoading}>Cancel</Button>
+                          <Button size="sm" onClick={() => handleSaveEdit(message.id)} disabled={isLoading || !editContent.trim()} className="bg-gray-900 dark:bg-white text-white dark:text-black">Save</Button>
+                        </div>
+                      </div>
+                    ) : Array.isArray(message.content)
                       ? message.content.filter((part: MessagePart) => part.type === 'text').map((part: MessagePart, idx: number) => (
                           <div
                             key={idx}
