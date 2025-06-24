@@ -43,7 +43,6 @@ async function saveMessage(userId: string, chatId: string, message: any) {
   const existingChat = await collection.findOne({ userId, chatId })
   const finalChatId = chatId === "default" || !chatId ? `chat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` : chatId
   
-  // Ensure the message has a unique id
   const messageWithId = {
     ...message,
     id: message.id || `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -275,16 +274,24 @@ export async function POST(req: NextRequest) {
 
     if (trimmedMessages.length > 0) {
       try {
-        const geminiMessages = trimmedMessages.map((msg: any) => ({
-          role: msg.role,
-          content: Array.isArray(msg.content)
-            ? msg.content.map((part: any) =>
-                part.type === 'file'
-                  ? { ...part, data: new Uint8Array(part.data) }
-                  : part
-              )
-            : msg.content,
-        }))
+        const geminiMessages = trimmedMessages.map((msg: any) => {
+          let contentString = '';
+          if (typeof msg.content === 'string') {
+            contentString = msg.content;
+          } else if (Array.isArray(msg.content)) {
+            const textParts = msg.content.filter((part: any) => part.type === 'text').map((part: any) => part.text).join(' ');
+            const fileParts = msg.content.filter((part: any) => part.type === 'file');
+            let fileString = '';
+            if (fileParts.length > 0) {
+              fileString = fileParts.map((file: any) => `[file attached: ${file.name || 'unnamed file'}]`).join(' ');
+            }
+            contentString = [textParts, fileString].filter(Boolean).join(' ');
+          }
+          return {
+            role: msg.role,
+            content: contentString,
+          };
+        });
         
         if (geminiMessages.length > 0) {
           await mem0.add(geminiMessages, { user_id: userId })
@@ -294,54 +301,46 @@ export async function POST(req: NextRequest) {
       }
     }
     
-    const validMessagesForAPI = trimmedMessages
-      .filter(msg => 
-        hasNonEmptyContent(msg) &&
-        msg.role && (msg.role === 'user' || msg.role === 'assistant')
-      )
-      .map(msg => {
-        if (typeof msg.content === 'string') {
-          return { role: msg.role, content: msg.content }
-        }
-        
-        if (Array.isArray(msg.content)) {
-          const textParts = msg.content.filter((part: any) => part.type === 'text')
-          const fileParts = msg.content.filter((part: any) => part.type === 'file')
-          
-          let content = textParts.map((part: any) => part.text).join('\n')
-          if (!content && fileParts.length > 0) {
-            content = "Please analyze the attached file(s)."
+    let memoryContext = '';
+    try {
+      const userMemories = await mem0.getAll({ user_id: userId });
+      if (Array.isArray(userMemories) && userMemories.length > 0) {
+        memoryContext = userMemories.map((mem: any) => mem.memory).filter(Boolean).join('\n');
+      }
+    } catch (err) {
+      console.error('Error fetching user memory for context:', err);
+    }
+
+    type RoleType = 'user' | 'assistant' | 'system';
+    let contextMessages: { role: RoleType; content: string }[] = [];
+    if (memoryContext) {
+      contextMessages.push({ role: 'system', content: `User memory/context:\n${memoryContext}` });
+    }
+    contextMessages = contextMessages.concat(
+      trimmedMessages
+        .filter(msg => hasNonEmptyContent(msg) && msg.role && (msg.role === 'user' || msg.role === 'assistant'))
+        .map(msg => {
+          let role: RoleType = (msg.role === 'user' || msg.role === 'assistant') ? msg.role : 'user';
+          if (typeof msg.content === 'string') {
+            return { role, content: msg.content };
           }
-          
-          if (fileParts.length > 0) {
-            const attachments = fileParts.map((part: any) => ({
-              type: 'file',
-              data: new Uint8Array(part.data),
-              mimeType: part.mimeType,
-              name: part.name
-            }))
-            console.log(`Message with ${fileParts.length} file attachments:`, {
-              role: msg.role,
-              content,
-              attachments: attachments.map((a: any) => ({ name: a.name, mimeType: a.mimeType, dataLength: a.data.length }))
-            })
-            const contentArray = [
-              { type: 'text', text: content },
-              ...attachments
-            ]
-            return { 
-              role: msg.role, 
-              content: contentArray
+          if (Array.isArray(msg.content)) {
+            const textParts = msg.content.filter((part: any) => part.type === 'text');
+            const fileParts = msg.content.filter((part: any) => part.type === 'file');
+            let content = textParts.map((part: any) => part.text).join('\n');
+            if (!content && fileParts.length > 0) {
+              content = 'Please analyze the attached file(s).';
             }
+            if (fileParts.length > 0) {
+              content += '\n' + fileParts.map((file: any) => `[file attached: ${file.name || 'unnamed file'}]`).join(' ');
+            }
+            return { role, content };
           }
-          
-          return { role: msg.role, content }
-        }
-        
-        return { role: msg.role, content: msg.content }
-      })
-    
-    if (validMessagesForAPI.length === 0) {
+          return { role, content: String(msg.content) };
+        })
+    );
+
+    if (contextMessages.length === 0) {
       return new NextResponse("Hello! I'm here to help. How can I assist you today?", {
         headers: { "Content-Type": "text/plain; charset=utf-8" }
       })
@@ -350,7 +349,7 @@ export async function POST(req: NextRequest) {
     try {
       const { textStream } = await streamText({
         model: google("gemini-2.0-flash"),
-        messages: validMessagesForAPI,
+        messages: contextMessages,
         maxTokens: 4096,
       })
       
