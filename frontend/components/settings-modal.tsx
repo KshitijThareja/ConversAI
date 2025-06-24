@@ -33,7 +33,6 @@ export function SettingsModal({ children }: SettingsModalProps) {
     fetch(`/api/memories/${userId}`)
       .then(res => res.json())
       .then(data => {
-        console.log("Memories data:", data)
         setMemories(Array.isArray(data.memories) ? data.memories : [])
       })
       .catch(error => {

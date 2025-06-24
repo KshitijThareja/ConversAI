@@ -206,8 +206,6 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent, onC
           userId,
         }),
       })
-
-      console.log("Response status:", response.status, response.statusText)
       
       if (!response.ok) {
         const errorText = await response.text()
@@ -220,7 +218,6 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent, onC
         throw new Error("No response body reader available")
       }
       
-      console.log("Starting to read stream")
       const decoder = new TextDecoder()
       let fullResponse = ""
       
@@ -239,11 +236,9 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent, onC
       while (true) {
         const { done, value } = await reader.read()
         if (done) {
-          console.log("Stream reading completed")
           break
         }
         const chunk = decoder.decode(value)
-        console.log("Received chunk:", chunk)
         fullResponse += chunk
         
         setMessages((prev) => 

@@ -30,7 +30,6 @@ async function getChatHistory(userId: string, chatId?: string) {
           { _id: chat._id },
           { $set: { messages: cleanedMessages } }
         )
-        console.log(`Cleaned up ${chat.messages.length - cleanedMessages.length} empty messages from chat ${chat.chatId}`)
       }
     }
   }
@@ -241,9 +240,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    console.log("API route called")
     const { messages, chatId, userId } = await req.json()
-    console.log("Request data:", { messages: messages?.length, chatId, userId })
 
     let actualChatId = chatId;
     const db = await connectToDatabase();
@@ -263,13 +260,10 @@ export async function POST(req: NextRequest) {
       lastDbMessage.role !== userMessage.role
     ) {
       actualChatId = await saveMessage(userId, chatId, userMessage);
-      console.log("Saved user message, chatId:", actualChatId);
     } else {
-      console.log("User message already present, skipping save.");
     }
 
     const history = await getChatHistory(userId, actualChatId)
-    console.log("Chat history fetched:", history.length)
     
     const cleanedHistory = history.map(chat => ({
       ...chat,
@@ -277,9 +271,7 @@ export async function POST(req: NextRequest) {
     }))
     
     const allMessages = [...(cleanedHistory[0]?.messages || []), ...messages]
-    console.log("All messages after cleanup:", allMessages.length)
     const trimmedMessages = trimMessagesToTokenLimit(allMessages, MAX_TOKENS)
-    console.log("Trimmed messages:", trimmedMessages.length)
 
     if (trimmedMessages.length > 0) {
       try {
@@ -296,14 +288,11 @@ export async function POST(req: NextRequest) {
         
         if (geminiMessages.length > 0) {
           await mem0.add(geminiMessages, { user_id: userId })
-          console.log("Saved to mem0")
         }
       } catch (error) {
         console.error('Error saving to mem0:', error)
       }
     }
-
-    console.log("About to call streamText with messages:", trimmedMessages)
     
     const validMessagesForAPI = trimmedMessages
       .filter(msg => 
@@ -352,44 +341,31 @@ export async function POST(req: NextRequest) {
         return { role: msg.role, content: msg.content }
       })
     
-    console.log("Valid messages for API:", validMessagesForAPI.map(msg => ({
-      role: msg.role,
-      content: typeof msg.content === 'string' ? msg.content.slice(0, 100) : 'Array content',
-      hasAttachments: !!(msg as any).attachments
-    })))
-    
     if (validMessagesForAPI.length === 0) {
-      console.log("No valid messages found, returning default response")
       return new NextResponse("Hello! I'm here to help. How can I assist you today?", {
         headers: { "Content-Type": "text/plain; charset=utf-8" }
       })
     }
     
     try {
-      console.log("Google API Key configured:", !!process.env.GOOGLE_GENERATIVE_AI_API_KEY)
-      
       const { textStream } = await streamText({
         model: google("gemini-2.0-flash"),
         messages: validMessagesForAPI,
         maxTokens: 4096,
       })
       
-      console.log("streamText called successfully, creating stream")
 
       let fullResponse = ""
       const assistantMessageId = `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
       const stream = new ReadableStream({
         async start(controller) {
           try {
-            console.log("Stream start function called")
             let chunkCount = 0
             for await (const chunk of textStream) {
               chunkCount++
-              console.log(`Received chunk ${chunkCount}:`, chunk)
               fullResponse += chunk
               controller.enqueue(new TextEncoder().encode(chunk))
             }
-            console.log(`Streaming completed after ${chunkCount} chunks, fullResponse:`, fullResponse)
             controller.close()
             
             await saveMessage(userId, actualChatId, {
@@ -398,7 +374,6 @@ export async function POST(req: NextRequest) {
               content: fullResponse,
               createdAt: new Date(),
             })
-            console.log("Message saved to database")
           } catch (error) {
             console.error("Error in streaming:", error)
             controller.error(error)
@@ -406,7 +381,6 @@ export async function POST(req: NextRequest) {
         },
       })
 
-      console.log("Returning stream response")
       return new NextResponse(stream, {
         headers: { 
           "Content-Type": "text/plain; charset=utf-8",
