@@ -239,7 +239,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const { messages, chatId, userId } = await req.json()
+    const { messages, chatId, userId } = await req.json();
 
     let actualChatId = chatId;
     const db = await connectToDatabase();
@@ -259,45 +259,46 @@ export async function POST(req: NextRequest) {
       lastDbMessage.role !== userMessage.role
     ) {
       actualChatId = await saveMessage(userId, chatId, userMessage);
-    } else {
     }
 
-    const history = await getChatHistory(userId, actualChatId)
+    const history = await getChatHistory(userId, actualChatId);
     
     const cleanedHistory = history.map(chat => ({
       ...chat,
       messages: chat.messages?.filter(hasNonEmptyContent) || []
-    }))
+    }));
     
-    const allMessages = [...(cleanedHistory[0]?.messages || []), ...messages]
-    const trimmedMessages = trimMessagesToTokenLimit(allMessages, MAX_TOKENS)
+    const allMessages = [...(cleanedHistory[0]?.messages || []), ...messages];
+    const trimmedMessages = trimMessagesToTokenLimit(allMessages, MAX_TOKENS);
 
     if (trimmedMessages.length > 0) {
       try {
         const geminiMessages = trimmedMessages.map((msg: any) => {
-          let contentString = '';
+          let textContent = '';
           if (typeof msg.content === 'string') {
-            contentString = msg.content;
+            textContent = msg.content;
           } else if (Array.isArray(msg.content)) {
-            const textParts = msg.content.filter((part: any) => part.type === 'text').map((part: any) => part.text).join(' ');
-            const fileParts = msg.content.filter((part: any) => part.type === 'file');
-            let fileString = '';
-            if (fileParts.length > 0) {
-              fileString = fileParts.map((file: any) => `[file attached: ${file.name || 'unnamed file'}]`).join(' ');
+            const textParts = msg.content.filter((part: any) => part.type === 'text');
+            textContent = textParts.map((part: any) => part.text).join('\n');
+            if (!textContent) {
+              textContent = "Message with file attachment(s)";
             }
-            contentString = [textParts, fileString].filter(Boolean).join(' ');
+          } else {
+            textContent = String(msg.content);
           }
+          
           return {
             role: msg.role,
-            content: contentString,
+            content: textContent
           };
         });
         
         if (geminiMessages.length > 0) {
-          await mem0.add(geminiMessages, { user_id: userId })
+          console.log("Adding to mem0:", geminiMessages[0].content);
+          await mem0.add(geminiMessages, { user_id: userId });
         }
       } catch (error) {
-        console.error('Error saving to mem0:', error)
+        console.error('Error saving to mem0:', error);
       }
     }
     
@@ -314,7 +315,7 @@ export async function POST(req: NextRequest) {
     console.log("Memory context:", memoryContext);
 
     type RoleType = 'user' | 'assistant' | 'system';
-    let contextMessages: { role: RoleType; content: string }[] = [];
+    let contextMessages: { role: RoleType; content: string | any[] }[] = [];
     if (memoryContext) {
       contextMessages.push({ role: 'system', content: `User memory/context:\n${memoryContext}` });
     }
@@ -322,65 +323,86 @@ export async function POST(req: NextRequest) {
       trimmedMessages
         .filter(msg => hasNonEmptyContent(msg) && msg.role && (msg.role === 'user' || msg.role === 'assistant'))
         .map(msg => {
-          let role: RoleType = (msg.role === 'user' || msg.role === 'assistant') ? msg.role : 'user';
           if (typeof msg.content === 'string') {
-            return { role, content: msg.content };
+            return { role: msg.role as RoleType, content: msg.content };
           }
           if (Array.isArray(msg.content)) {
             const textParts = msg.content.filter((part: any) => part.type === 'text');
             const fileParts = msg.content.filter((part: any) => part.type === 'file');
+            
             let content = textParts.map((part: any) => part.text).join('\n');
             if (!content && fileParts.length > 0) {
-              content = 'Please analyze the attached file(s).';
+              content = "Please analyze the attached file(s).";
             }
+            
             if (fileParts.length > 0) {
-              content += '\n' + fileParts.map((file: any) => `[file attached: ${file.name || 'unnamed file'}]`).join(' ');
+              const attachments = fileParts.map((part: any) => ({
+                type: 'file',
+                data: new Uint8Array(part.data),
+                mimeType: part.mimeType,
+                name: part.name
+              }));
+              console.log(`Message with ${fileParts.length} file attachments:`, {
+                role: msg.role,
+                content,
+                attachments: attachments.map((a: any) => ({ name: a.name, mimeType: a.mimeType, dataLength: a.data.length }))
+              });
+              return { 
+                role: msg.role as RoleType, 
+                content: [
+                  { type: 'text', text: content },
+                  ...attachments
+                ]
+              };
             }
-            return { role, content };
+            return { role: msg.role as RoleType, content };
           }
-          return { role, content: String(msg.content) };
+          return { role: msg.role as RoleType, content: String(msg.content) };
         })
     );
+
+    console.log("Context messages:", contextMessages);
 
     if (contextMessages.length === 0) {
       return new NextResponse("Hello! I'm here to help. How can I assist you today?", {
         headers: { "Content-Type": "text/plain; charset=utf-8" }
-      })
+      });
     }
     
     try {
       const { textStream } = await streamText({
-        model: google("gemini-2.0-flash"),
+        model: google("gemini-2.5-flash"),
+        // @ts-ignore
         messages: contextMessages,
         maxTokens: 4096,
-      })
+      });
       
 
-      let fullResponse = ""
-      const assistantMessageId = `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+      let fullResponse = "";
+      const assistantMessageId = `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       const stream = new ReadableStream({
         async start(controller) {
           try {
-            let chunkCount = 0
+            let chunkCount = 0;
             for await (const chunk of textStream) {
-              chunkCount++
-              fullResponse += chunk
-              controller.enqueue(new TextEncoder().encode(chunk))
+              chunkCount++;
+              fullResponse += chunk;
+              controller.enqueue(new TextEncoder().encode(chunk));
             }
-            controller.close()
+            controller.close();
             
             await saveMessage(userId, actualChatId, {
               id: assistantMessageId,
               role: "assistant",
               content: fullResponse,
               createdAt: new Date(),
-            })
+            });
           } catch (error) {
-            console.error("Error in streaming:", error)
-            controller.error(error)
+            console.error("Error in streaming:", error);
+            controller.error(error);
           }
         },
-      })
+      });
 
       return new NextResponse(stream, {
         headers: { 
@@ -388,20 +410,20 @@ export async function POST(req: NextRequest) {
           "Cache-Control": "no-cache",
           "Connection": "keep-alive"
         },
-      })
+      });
     } catch (error) {
-      console.error("Error calling streamText:", error)
+      console.error("Error calling streamText:", error);
       return new NextResponse("Sorry, I'm having trouble connecting to my AI service right now. Please try again later.", {
         status: 500,
         headers: { "Content-Type": "text/plain; charset=utf-8" }
-      })
+      });
     }
   } catch (error) {
-    console.error("Error in POST handler:", error)
+    console.error("Error in POST handler:", error);
     return new NextResponse(JSON.stringify({ error: "Internal server error" }), {
       status: 500,
       headers: { "Content-Type": "application/json" }
-    })
+    });
   }
 }
 

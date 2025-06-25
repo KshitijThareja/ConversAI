@@ -127,7 +127,7 @@ function SidebarContent({
             className="place-items-center w-10 h-10 rounded-md text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2f2f2f]"
             aria-label="Toggle sidebar"
           >
-            {isMobile ? (isOpen ? <SidebarIcon className="w-4 h-4 hidden" /> : <SidebarIcon className="w-4 h-4" />) : <SidebarIcon className="mt-2 w-6 h-6 m-auto" />}
+            {isMobile ? (isOpen ? <></> : <SidebarIcon className="w-4 h-4" />) : <SidebarIcon className="w-6 h-6" />}
           </button>
           {isMobile && (
             <Button
