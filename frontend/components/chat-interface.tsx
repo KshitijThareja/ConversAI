@@ -23,18 +23,18 @@ interface ChatInterfaceProps {
 }
 
 const HamburgerIcon = () => (
-  <svg 
-    data-rtl-flip="true" 
-    className="icon-lg mx-2" 
-    width="20" 
-    height="20" 
-    viewBox="0 0 20 20" 
-    fill="currentColor" 
+  <svg
+    data-rtl-flip="true"
+    className="icon-lg mx-2"
+    width="20"
+    height="20"
+    viewBox="0 0 20 20"
+    fill="currentColor"
     xmlns="http://www.w3.org/2000/svg"
     aria-hidden="true"
   >
-    <path d="M11.6663 12.6686L11.801 12.6823C12.1038 12.7445 12.3313 13.0125 12.3313 13.3337C12.3311 13.6547 12.1038 13.9229 11.801 13.985L11.6663 13.9987H3.33325C2.96609 13.9987 2.66839 13.7008 2.66821 13.3337C2.66821 12.9664 2.96598 12.6686 3.33325 12.6686H11.6663ZM16.6663 6.00163L16.801 6.0153C17.1038 6.07747 17.3313 6.34546 17.3313 6.66667C17.3313 6.98788 17.1038 7.25586 16.801 7.31803L16.6663 7.33171H3.33325C2.96598 7.33171 2.66821 7.03394 2.66821 6.66667C2.66821 6.2994 2.96598 6.00163 3.33325 6.00163H16.6663Z" 
-    stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+    <path d="M11.6663 12.6686L11.801 12.6823C12.1038 12.7445 12.3313 13.0125 12.3313 13.3337C12.3311 13.6547 12.1038 13.9229 11.801 13.985L11.6663 13.9987H3.33325C2.96609 13.9987 2.66839 13.7008 2.66821 13.3337C2.66821 12.9664 2.96598 12.6686 3.33325 12.6686H11.6663ZM16.6663 6.00163L16.801 6.0153C17.1038 6.07747 17.3313 6.34546 17.3313 6.66667C17.3313 6.98788 17.1038 7.25586 16.801 7.31803L16.6663 7.33171H3.33325C2.96598 7.33171 2.66821 7.03394 2.66821 6.66667C2.66821 6.2994 2.96598 6.00163 3.33325 6.00163H16.6663Z"
+      stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
   </svg>
 )
 
@@ -206,7 +206,7 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent, onC
           userId,
         }),
       })
-      
+
       if (!response.ok) {
         const errorText = await response.text()
         console.error("API error:", errorText)
@@ -217,10 +217,10 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent, onC
       if (!reader) {
         throw new Error("No response body reader available")
       }
-      
+
       const decoder = new TextDecoder()
       let fullResponse = ""
-      
+
       const assistantMessageId = `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
       setMessages((prev) => [
         ...prev.slice(0, -1),
@@ -240,18 +240,18 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent, onC
         }
         const chunk = decoder.decode(value)
         fullResponse += chunk
-        
-        setMessages((prev) => 
-          prev.map(msg => 
-            msg.id === assistantMessageId 
+
+        setMessages((prev) =>
+          prev.map(msg =>
+            msg.id === assistantMessageId
               ? { ...msg, content: fullResponse }
               : msg
           )
         )
       }
-      
+
       onMessageSent?.()
-        
+
       if (!chatId && onChatIdUpdate) {
         try {
           const chatResponse = await fetch(`/api/chat?userId=${userId}`)
@@ -338,10 +338,10 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent, onC
         <header className="flex items-center justify-between p-3 md:p-4" role="banner">
           <div className="flex items-center gap-2">
             {(!isOpen && isMobile) && (
-              <Button 
-                size="sm" 
-                variant="ghost" 
-                onClick={toggleSidebar} 
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={toggleSidebar}
                 className="h-8 w-8 p-0 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2f2f2f] mr-2"
                 aria-label="Toggle sidebar menu"
               >
@@ -413,9 +413,9 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent, onC
                         </div>
                       ) : (
                         <div className="flex items-center gap-2 rounded-xl border bg-white dark:bg-[#232324] p-2 pr-4 shadow-sm" role="img" aria-label={`File: ${part.name}`}>
-                          <div className={`flex items-center justify-center w-8 h-8 rounded-lg ${part.mimeType.includes('pdf') ? 'bg-pink-100' : 'bg-blue-100'}`}> 
+                          <div className={`flex items-center justify-center w-8 h-8 rounded-lg ${part.mimeType.includes('pdf') ? 'bg-pink-100' : 'bg-blue-100'}`}>
                             <span className={`material-symbols-rounded ${part.mimeType.includes('pdf') ? 'text-pink-500' : 'text-blue-500'} text-2xl`}>
-                              {part.mimeType.includes('pdf') ? <FileText /> : 'description'}
+                              <FileText />
                             </span>
                           </div>
                           <div className="flex flex-col">
@@ -445,10 +445,10 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent, onC
                 <div className="flex items-center justify-between p-2">
                   <div className="flex items-center gap-2">
                     <FileUpload onUpload={files => handleFileUpload(files as FileList)}>
-                      <Button 
-                        type="button" 
-                        size="sm" 
-                        variant="ghost" 
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
                         className="h-8 px-2 md:px-3 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-[#404040] rounded-lg text-xs md:text-sm"
                         aria-label="Add file attachment"
                       >
@@ -457,10 +457,10 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent, onC
                     </FileUpload>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Button 
-                      type="submit" 
-                      disabled={isLoading || (!input.trim() && pendingParts.length === 0)} 
-                      size="sm" 
+                    <Button
+                      type="submit"
+                      disabled={isLoading || (!input.trim() && pendingParts.length === 0)}
+                      size="sm"
                       className="h-8 w-8 p-0 bg-gray-900 dark:bg-white text-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200 rounded-full disabled:opacity-50"
                       aria-label="Send message"
                       aria-describedby={isLoading ? "loading-status" : undefined}
@@ -490,10 +490,10 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent, onC
       <header className="flex items-center justify-between p-3 md:p-4" role="banner">
         <div className="flex items-center gap-2">
           {(!isOpen && isMobile) && (
-            <Button 
-              size="sm" 
-              variant="ghost" 
-              onClick={toggleSidebar} 
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={toggleSidebar}
               className="h-8 w-8 p-0 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2f2f2f] mr-2"
               aria-label="Toggle sidebar menu"
             >
@@ -504,9 +504,9 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent, onC
         </div>
         <div className="flex items-center gap-2">
           <SettingsModal>
-            <Button 
-              size="sm" 
-              variant="ghost" 
+            <Button
+              size="sm"
+              variant="ghost"
               className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2f2f2f] h-8 w-8 p-0"
               aria-label="Open settings"
             >
@@ -543,19 +543,19 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent, onC
                           autoFocus
                         />
                         <div className="flex gap-2 justify-end">
-                          <Button 
-                            size="sm" 
-                            variant="outline" 
-                            onClick={handleCancelEdit} 
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={handleCancelEdit}
                             disabled={isLoading}
                             aria-label="Cancel editing"
                           >
                             Cancel
                           </Button>
-                          <Button 
-                            size="sm" 
-                            onClick={() => handleSaveEdit(message.id)} 
-                            disabled={isLoading || !editContent.trim()} 
+                          <Button
+                            size="sm"
+                            onClick={() => handleSaveEdit(message.id)}
+                            disabled={isLoading || !editContent.trim()}
                             className="bg-gray-900 dark:bg-white text-white dark:text-black"
                             aria-label="Save edited message"
                           >
@@ -565,25 +565,25 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent, onC
                       </div>
                     ) : Array.isArray(message.content)
                       ? message.content.filter((part: MessagePart) => part.type === 'text').map((part: MessagePart, idx: number) => (
-                          <div
-                            key={idx}
-                            className={`px-5 py-3 ${isUser ? "bg-gray-100 dark:bg-[#303030] text-gray-900 dark:text-white rounded-2xl rounded-br-md" : "text-gray-900 dark:text-white"}`}
-                            style={{ background: isAssistant ? "none" : undefined }}
-                            role="text"
-                          >
-                            <MessageContent content={part.type === 'text' ? part.text : ''} />
-                          </div>
-                        ))
+                        <div
+                          key={idx}
+                          className={`px-5 py-3 ${isUser ? "bg-gray-100 dark:bg-[#303030] text-gray-900 dark:text-white rounded-2xl rounded-br-md" : "text-gray-900 dark:text-white"}`}
+                          style={{ background: isAssistant ? "none" : undefined }}
+                          role="text"
+                        >
+                          <MessageContent content={part.type === 'text' ? part.text : ''} />
+                        </div>
+                      ))
                       : (
-                          <div
-                            className={`px-5 py-3 ${isUser ? "bg-gray-100 dark:bg-[#303030] text-gray-900 dark:text-white rounded-2xl rounded-br-md" : "text-gray-900 dark:text-white"}`}
-                            style={{ background: isAssistant ? "none" : undefined }}
-                            role="text"
-                          >
-                            <MessageContent content={message.content as string} />
-                          </div>
-                        )}
-                    
+                        <div
+                          className={`px-5 py-3 ${isUser ? "bg-gray-100 dark:bg-[#303030] text-gray-900 dark:text-white rounded-2xl rounded-br-md" : "text-gray-900 dark:text-white"}`}
+                          style={{ background: isAssistant ? "none" : undefined }}
+                          role="text"
+                        >
+                          <MessageContent content={message.content as string} />
+                        </div>
+                      )}
+
                     {/* File/image badges below the message bubble */}
                     {Array.isArray(message.content) && message.content.some((p: MessagePart) => p.type === 'file' && p.mimeType && (p.mimeType.startsWith('image/') || p.mimeType)) && (
                       <div className="flex flex-wrap gap-2 mt-2 justify-end" role="group" aria-label="Message attachments">
@@ -604,9 +604,9 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent, onC
                             </div>
                           ) : (
                             <div key={idx} className="flex items-center gap-2 rounded-xl border bg-white dark:bg-[#232324] p-2 pr-4 shadow-sm" role="img" aria-label={`File attachment: ${part.name}`}>
-                              <div className={`flex items-center justify-center w-8 h-8 rounded-lg ${part.mimeType?.includes('pdf') ? 'bg-pink-100' : 'bg-blue-100'}`}> 
+                              <div className={`flex items-center justify-center w-8 h-8 rounded-lg ${part.mimeType?.includes('pdf') ? 'bg-pink-100' : 'bg-blue-100'}`}>
                                 <span className={`material-symbols-rounded ${part.mimeType?.includes('pdf') ? 'text-pink-500' : 'text-blue-500'} text-2xl`}>
-                                  {part.mimeType?.includes('pdf') ? <FileText /> : 'description'}
+                                  <FileText />
                                 </span>
                               </div>
                               <div className="flex flex-col">
@@ -619,23 +619,23 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent, onC
                       </div>
                     )}
                   </div>
-                  
+
                   {/* Copy and Edit buttons - positioned below message and only visible on hover */}
                   {isUser && (
                     <div className="flex gap-1 mt-2 justify-end opacity-0 group-hover:opacity-100 transition-opacity duration-200" role="group" aria-label="Message actions">
-                      <Button 
-                        size="sm" 
-                        variant="ghost" 
-                        className="h-6 w-6 p-0 text-gray-400 hover:text-white" 
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 w-6 p-0 text-gray-400 hover:text-white"
                         onClick={() => copyToClipboard(Array.isArray(message.content) ? message.content.filter((p: any) => p.type === 'text').map((p: any) => p.text).join("\n") : message.content as string)}
                         aria-label="Copy message to clipboard"
                       >
                         <Copy className="w-3 h-3" />
                       </Button>
-                      <Button 
-                        size="sm" 
-                        variant="ghost" 
-                        className="h-6 w-6 p-0 text-gray-400 hover:text-white" 
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 w-6 p-0 text-gray-400 hover:text-white"
                         onClick={() => handleEditMessage(message.id, Array.isArray(message.content) ? message.content.filter((p: any) => p.type === 'text').map((p: any) => p.text).join("\n") : message.content as string)}
                         aria-label="Edit message"
                       >
@@ -645,20 +645,20 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent, onC
                   )}
                   {isAssistant && (
                     <div className="flex gap-1 mt-2 ml-4" role="group" aria-label="Assistant message actions">
-                      <Button 
-                        size="sm" 
-                        variant="ghost" 
-                        className="h-6 w-6 p-0 text-gray-400 hover:text-black dark:hover:text-white" 
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 w-6 p-0 text-gray-400 hover:text-black dark:hover:text-white"
                         onClick={() => copyToClipboard(Array.isArray(message.content) ? message.content.filter((p: any) => p.type === 'text').map((p: any) => p.text).join("\n") : message.content)}
                         aria-label="Copy assistant message to clipboard"
                       >
                         <Copy className="w-3 h-3" />
                       </Button>
                       {index === messages.length - 1 && (
-                        <Button 
-                          size="sm" 
-                          variant="ghost" 
-                          className="h-6 w-6 p-0 text-gray-400 hover:text-black dark:hover:text-white" 
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 w-6 p-0 text-gray-400 hover:text-black dark:hover:text-white"
                           onClick={handleRegenerateLastAssistant}
                           aria-label="Regenerate assistant response"
                         >
@@ -720,9 +720,9 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent, onC
                       </div>
                     ) : (
                       <div className="flex items-center gap-2 rounded-xl border bg-white dark:bg-[#232324] p-2 pr-4 shadow-sm" role="img" aria-label={`File: ${part.name}`}>
-                        <div className={`flex items-center justify-center w-8 h-8 rounded-lg ${part.mimeType.includes('pdf') ? 'bg-pink-100' : 'bg-blue-100'}`}> 
+                        <div className={`flex items-center justify-center w-8 h-8 rounded-lg ${part.mimeType.includes('pdf') ? 'bg-pink-100' : 'bg-blue-100'}`}>
                           <span className={`material-symbols-rounded ${part.mimeType.includes('pdf') ? 'text-pink-500' : 'text-blue-500'} text-2xl`}>
-                            {part.mimeType.includes('pdf') ? <FileText /> : 'description'}
+                            <FileText />
                           </span>
                         </div>
                         <div className="flex flex-col">
@@ -752,10 +752,10 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent, onC
               <div className="flex items-center justify-between p-2">
                 <div className="flex items-center gap-2">
                   <FileUpload onUpload={files => handleFileUpload(files as FileList)}>
-                    <Button 
-                      type="button" 
-                      size="sm" 
-                      variant="ghost" 
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
                       className="h-8 px-2 md:px-3 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-[#404040] rounded-lg text-xs md:text-sm"
                       aria-label="Add file attachment"
                     >
@@ -764,10 +764,10 @@ export function ChatInterface({ chatId, initialMessages = [], onMessageSent, onC
                   </FileUpload>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button 
-                    type="submit" 
-                    disabled={isLoading || (!input.trim() && pendingParts.length === 0)} 
-                    size="sm" 
+                  <Button
+                    type="submit"
+                    disabled={isLoading || (!input.trim() && pendingParts.length === 0)}
+                    size="sm"
                     className="h-8 w-8 p-0 bg-gray-900 dark:bg-white text-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200 rounded-full disabled:opacity-50"
                     aria-label="Send message"
                     aria-describedby={isLoading ? "loading-status" : undefined}

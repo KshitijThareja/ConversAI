@@ -5,12 +5,11 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { Search, Plus, X } from "lucide-react"
+import { Plus, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import type { Chat } from "@/lib/types"
 import { getMessagePreviewText } from "@/lib/utils"
@@ -148,11 +147,11 @@ export function SearchModal({ chats, currentChatId, onChatSelect, onNewChat, tri
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogTitle id="search-title" className="sr-only">Search Chats</DialogTitle>
       <DialogContent hideClose={true} className="sm:max-w-[425px] md:max-w-[600px] md:h-[450px] border-2 bg-gray-50 dark:bg-[#2f2f2f]" role="dialog" aria-labelledby="search-title">
-        <header className="flex items-center border-b border-gray-200 dark:border-[#424242] pb-4 px-1" role="search">
+        <header className="flex items-center border-b border-gray-200 dark:border-[#424242] pb-0 px-1" role="search">
           <div className="relative flex-1">
-            <Input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+          <Input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search chats..."
               aria-label="Search chats"
               aria-describedby="search-help"
@@ -169,7 +168,7 @@ export function SearchModal({ chats, currentChatId, onChatSelect, onNewChat, tri
             <X className="w-6 h-6" />
           </Button>
         </header>
-        <main className="grid gap-4 py-4" role="main">
+        <main className="grid gap-4 py-0" role="main">
           <ScrollArea className="h-[300px]" role="region" aria-label="Search results">
             <Button
               onClick={() => {
@@ -183,32 +182,32 @@ export function SearchModal({ chats, currentChatId, onChatSelect, onNewChat, tri
               New Chat
             </Button>
             <div role="list" aria-label="Search results by category">
-              {Object.entries(categorizedChats).map(([category, chatsInCategory]) => (
-                chatsInCategory.length > 0 && (
+            {Object.entries(categorizedChats).map(([category, chatsInCategory]) => (
+              chatsInCategory.length > 0 && (
                   <div key={category} role="group" aria-labelledby={`category-${category}`}>
                     <h4 id={`category-${category}`} className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider px-2 py-1">
-                      {category.charAt(0).toUpperCase() + category.slice(1)}
-                    </h4>
+                    {category.charAt(0).toUpperCase() + category.slice(1)}
+                  </h4>
                     <div role="list" aria-label={`${category} chats`}>
-                      {chatsInCategory.map((chat) => (
-                        <div
-                          key={chat.id}
-                          className={`p-2 hover:bg-gray-100 dark:hover:bg-[#424242] rounded-md cursor-pointer ${currentChatId === chat.id ? "bg-gray-100 dark:bg-[#2f2f2f]" : ""}`}
+                  {chatsInCategory.map((chat) => (
+                    <div
+                      key={chat.id}
+                      className={`p-2 hover:bg-gray-100 dark:hover:bg-[#424242] rounded-md cursor-pointer ${currentChatId === chat.id ? "bg-gray-100 dark:bg-[#2f2f2f]" : ""}`}
                           role="listitem"
                           aria-label={`Chat: ${getMessagePreviewText(chat.title)}`}
                           aria-current={currentChatId === chat.id ? "true" : undefined}
-                          onClick={() => {
-                            onChatSelect(chat.id)
-                            setSearchOpen(false)
-                          }}
-                        >
-                          <span className="text-sm text-gray-700 dark:text-gray-200">{getMessagePreviewText(chat.title)}</span>
-                        </div>
-                      ))}
+                      onClick={() => {
+                        onChatSelect(chat.id)
+                        setSearchOpen(false)
+                      }}
+                    >
+                      <span className="text-sm text-gray-700 dark:text-gray-200">{getMessagePreviewText(chat.title)}</span>
                     </div>
-                  </div>
-                )
-              ))}
+                  ))}
+                    </div>
+                </div>
+              )
+            ))}
             </div>
             {Object.values(categorizedChats).every(chats => chats.length === 0) && (
               <div className="text-center text-gray-500 py-4" role="status">No chats found</div>
